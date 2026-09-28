@@ -2,6 +2,38 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-09-28
+
+### Neu (Bridge)
+- **Echter Loxone-Audioserver V2 jetzt vollwertig unterstützt** (bisher nur
+  Sonn Core): neuer authentifizierter Steuerkanal (`bin/audioserver_auth.js`,
+  `bin/miniserver_jwt.js`) implementiert den `secure/authenticate`-Handshake
+  gegen Port 7091 (`audio/cfg/getkey/full` + Miniserver-JWT via
+  `jdev/sys/getjwt`, Permission 2). Auf Hardware verifiziert gegen einen
+  echten Audioserver UND Sonn Core — beide unterstützen den Handshake
+  identisch. Ohne passenden Miniserver oder falls die Box `secure/
+  authenticate` nicht unterstützt, bleibt die bisherige unauthentifizierte
+  Zustands-Anzeige unverändert nutzbar (reiner Fallback, kein Funktionsverlust).
+- **Raumfavoriten**: werden alle 10 Min. (und auf Anfrage sofort) per
+  `getroomfavs` abgefragt und retained auf `<Zone>/favorites` publiziert.
+  Neue Kommando-Topics `<Zone>/set/favorite` (abspielen, generischer
+  `roomfav/play`-Befehl, funktioniert für alle Favoriten-Typen) und
+  `<Zone>/set/favorites_refresh` (sofortiges Update anfordern — für die
+  Firmware beim Öffnen des Favoriten-Overlays).
+- Neues optionales Panel-Feld `audioserver_msno` (`bridge.json`) für den
+  Fall, dass die Audioserver-Box einen anderen Miniserver braucht als der
+  Rest der Bridge (`loxone.msno`) — Standard-Fallback deckt den üblichen
+  Ein-Miniserver-Fall ohne Config-Änderung ab.
+
+### Fix (Bridge)
+- Mehrere Zonen auf derselben Audioserver-Box teilten sich beim
+  gleichzeitigen Abfragen der Favoriten eine Antwort (Cross-Talk: die erste
+  ankommende Antwort löste alle wartenden Anfragen auf, unabhängig davon
+  für welche Zone sie bestimmt war). Anfragen auf einer geteilten Verbindung
+  laufen jetzt strikt serialisiert.
+- Connect-Timeout für den neuen Steuerkanal ergänzt (hing zuvor unbegrenzt,
+  wenn die Box nicht erreichbar war).
+
 ## [Unreleased] - 2026-09-22 (3)
 
 ### Sonstiges

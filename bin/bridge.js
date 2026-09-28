@@ -5,6 +5,7 @@ const path = require('path');
 const http = require('http');
 const mqtt = require('mqtt');
 const { getAudioserverClient } = require('./audioserver');
+const { getAudioserverControlClient } = require('./audioserver_auth');
 const loxberrylog = require('./loxberrylog');
 
 // ── Pfade: LoxBerry vs. lokale Entwicklung ─────────────────
@@ -253,8 +254,13 @@ function buildStateFilter(cfg, loxStructure) {
 // Panels ohne audioserver_host/audioserver_zone werden übersprungen (Sonn
 // Core publiziert dann wie bisher direkt selbst, ohne dass diese Bridge
 // überhaupt beteiligt ist).
+// Raumfavoriten ändern sich selten (Nutzer legt sie in der Loxone-App an) —
+// alle 10 Minuten neu abfragen reicht, hält aber die retained MQTT-Kopie
+// aktuell falls sich doch mal was ändert, ohne die Box unnötig zu pollen.
+const FAVORITES_REFRESH_MS = 10 * 60 * 1000;
+
 function setupAudioZones(cfg, mqttClient) {
-  const zones = []; // { topicBase, host, httpPort, zoneNum, panelName }
+  const zones = []; // { topicBase, host, httpPort, zoneNum, panelName, ctrl }
 
   for (const panel of cfg.panels || []) {
     const host = panel.audioserver_host;
@@ -317,7 +323,54 @@ function setupAudioZones(cfg, mqttClient) {
       mqttClient.publish(`${topicBase}/server/online`, '0', { qos: 0, retain: true });
     });
 
-    zones.push({ topicBase, host, httpPort, zoneNum, panelName: panel.name });
+    // ── Raumfavoriten: Auth+Fallback-Steuerkanal (audioserver_auth.js) ──────
+    // Auf Hardware verifiziert (2026-09-28) gegen Sonn Core UND einen echten
+    // Loxone-Audioserver V2: secure/authenticate + getroomfavs + roomfav/play
+    // funktionieren auf beiden identisch. panel.audioserver_msno ist die
+    // general.json-Nummer/der Name des Miniservers, der für DIESE
+    // Audioserver-Box das JWT ausstellt — kann vom für den Rest der Bridge
+    // genutzten cfg.loxone.msno abweichen (z.B. mehrere Kunden-Miniserver auf
+    // einer LoxBerry). Ohne audioserver_msno bleibt die Zone einfach ohne
+    // Favoriten — Zustand/Play/Pause/Volume oben sind davon unberührt.
+    const audioMsno = panel.audioserver_msno || (cfg.loxone && cfg.loxone.msno);
+    let ctrl = null;
+    if (audioMsno) {
+      try {
+        const msConn = loadMiniserverConn(audioMsno);
+        ctrl = getAudioserverControlClient(host, wsPort, msConn);
+      } catch (e) {
+        console.warn(`[audio] Panel "${panel.name}": Miniserver #${audioMsno} für Favoriten nicht ladbar (${e.message}) — Favoriten-Feature bleibt für diese Zone aus`);
+      }
+    }
+
+    // publishFavorites bewusst außerhalb des "if (ctrl)"-Blocks deklariert
+    // (als No-Op falls kein ctrl) — der MQTT-Handler unten (case
+    // 'favorites_refresh') ruft dieselbe Funktion über zone.publishFavorites
+    // auf, wenn die Firmware beim Öffnen des Favoriten-Overlays aktiv ein
+    // frisches Update anfordert (statt bis zu 10 Minuten auf den nächsten
+    // Timer-Tick zu warten).
+    let publishFavorites = async () => {};
+    if (ctrl) {
+      publishFavorites = async () => {
+        try {
+          const authenticated = await ctrl.ready();
+          if (!authenticated) {
+            console.warn(`[audio] Panel "${panel.name}": Box unterstützt secure/authenticate nicht (${ctrl.authFailReason}) — keine Favoriten für diese Zone`);
+            return;
+          }
+          const items = await ctrl.getRoomFavorites(zoneNum);
+          if (mqttClient.connected) {
+            mqttClient.publish(`${topicBase}/favorites`, JSON.stringify({ items }), { qos: 0, retain: true });
+          }
+        } catch (e) {
+          console.warn(`[audio] Panel "${panel.name}": Favoriten-Abfrage fehlgeschlagen: ${e.message}`);
+        }
+      };
+      publishFavorites();
+      setInterval(publishFavorites, FAVORITES_REFRESH_MS);
+    }
+
+    zones.push({ topicBase, host, httpPort, zoneNum, panelName: panel.name, ctrl, publishFavorites });
   }
 
   if (zones.length === 0) return;
@@ -364,6 +417,27 @@ function setupAudioZones(cfg, mqttClient) {
         cmdPath = `volume/${vol}`;
         break;
       }
+      // Favorit abspielen läuft NICHT über die klassische HTTP-7090-Route
+      // (dort auf Hardware verifiziert: reiner Echo-Handler, kein echter
+      // Effekt, siehe Kommentar oben), sondern über den authentifizierten
+      // WS-Kanal (audioserver_auth.js) — deshalb eigener Zweig mit eigenem
+      // return statt cmdPath/sendAudioserverCommand.
+      case 'favorite': {
+        if (!zone.ctrl) {
+          console.warn(`[audio] "favorite" Kommando ignoriert (${zone.panelName}): kein Miniserver für Favoriten konfiguriert (panel.audioserver_msno)`);
+          return;
+        }
+        zone.ctrl.playRoomFavorite(zone.zoneNum, payload)
+          .then((res) => console.log(`[audio] Favorit ${payload} auf Zone ${zone.zoneNum} (${zone.panelName}):`, JSON.stringify(res.roomfav_result)))
+          .catch((e) => console.warn(`[audio] Favorit ${payload} abspielen fehlgeschlagen (${zone.panelName}): ${e.message}`));
+        return;
+      }
+      // Firmware fordert das beim Öffnen des Favoriten-Overlays aktiv an
+      // (statt bis zu FAVORITES_REFRESH_MS auf den nächsten Timer-Tick zu
+      // warten) — siehe MiraiPanel.yaml fetch_audio_favs.
+      case 'favorites_refresh':
+        zone.publishFavorites();
+        return;
       default:
         console.warn(`[audio] Unbekanntes Kommando-Subtopic: ${sub} (${zone.panelName})`);
         return;

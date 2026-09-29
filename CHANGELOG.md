@@ -2,6 +2,11 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-09-29 (3)
+
+### Sonstiges
+- Hinweistext im "Experimentell"-Kasten (Loxone-Radio für Sonn Core) gekürzt.
+
 ## [Unreleased] - 2026-09-29 (2)
 
 ### Sonstiges

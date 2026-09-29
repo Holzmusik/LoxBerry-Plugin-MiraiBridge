@@ -513,22 +513,12 @@ body.theme-glass-disabled .mp-app {
       </div>
     </div>
 
-    <!-- ── Experimentell: absichtlich NICHT im Panel-Editor, wo es jeder
-         Nutzer beim Audiozonen-Einrichten sehen würde — nutzt einen
-         inoffiziellen, nicht von Loxone/Streampal autorisierten Zugang
-         (siehe reference_loxone_radio_streampal_urls / CHANGELOG). Wer
-         diesen Bereich nicht gezielt aufsucht, stolpert nicht versehentlich
-         darüber. -->
-    <div class="card" style="border-color:#a35;">
+    <!-- ── Experimentell -->
+    <div class="card">
       <div class="card-title">Experimentell: Loxone-Radio für Sonn Core</div>
       <div style="font-size:12px;color:var(--txt2);margin-bottom:14px;">
         Legt die 13 kuratierten Loxone-Radio-Sender als "Eigene Streams" bei
-        Sonn Core an (nur für Sonn Core relevant — ein echter Loxone
-        Audioserver hat diese Sender bereits selbst). Nutzt dafür einen von
-        Loxone/Streampal nicht offiziell freigegebenen Zugang — kann
-        jederzeit ohne Vorwarnung aufhören zu funktionieren, und ist nicht
-        für den produktiven/dauerhaften Einsatz gedacht. Nur zum eigenen
-        Testen verwenden, nicht großflächig/automatisiert abfragen.
+        Sonn Core an.
       </div>
       <div class="row">
         <div class="field"><label>Sonn-Core-Host (IP)</label><input type="text" id="s-loxone-radio-host" placeholder="192.168.179.14"></div>

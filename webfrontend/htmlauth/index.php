@@ -379,21 +379,6 @@ body.theme-glass-disabled .mp-app {
           kurz beim Audioserver an, ca. 3 Sekunden).
         </div>
         <div class="row">
-          <div class="field" style="max-width:280px;justify-content:flex-end;">
-            <label>&nbsp;</label>
-            <button type="button" class="btn btn-secondary" onclick="setupLoxoneRadio()">Loxone-Radio-Sender einrichten</button>
-          </div>
-        </div>
-        <div id="loxone-radio-results" style="display:none;margin:-4px 0 10px;font-size:13px;"></div>
-        <div style="font-size:12px;color:var(--txt2);margin:-6px 0 10px;">
-          Legt die 13 kuratierten Loxone-Radio-Sender einmalig als "Eigene
-          Streams" bei Sonn Core an (nur nötig für Sonn Core — ein echter
-          Loxone Audioserver hat diese Sender bereits selbst). Kann
-          gefahrlos mehrfach geklickt werden, z.B. nach einer Sonn-Core-
-          Neuinstallation — bereits vorhandene Sender werden übersprungen.
-          Braucht nur den Audioserver-Host oben, dauert einige Sekunden.
-        </div>
-        <div class="row">
           <div class="field"><label>Schlaf-Steuerung (Schalter)</label><input type="text" list="switch-control-datalist" id="p-sleep-cmd"></div>
           <div class="field" style="max-width:160px;"><label>Sleep-Dauer (Minuten)</label><input type="number" id="p-sleep-minutes" value="5" min="1"></div>
         </div>
@@ -526,6 +511,33 @@ body.theme-glass-disabled .mp-app {
         <button class="btn btn-secondary" onclick="document.getElementById('import-file-input').click()">Konfiguration importieren…</button>
         <input type="file" id="import-file-input" accept="application/json,.json" style="display:none;" onchange="importConfig(this.files[0])">
       </div>
+    </div>
+
+    <!-- ── Experimentell: absichtlich NICHT im Panel-Editor, wo es jeder
+         Nutzer beim Audiozonen-Einrichten sehen würde — nutzt einen
+         inoffiziellen, nicht von Loxone/Streampal autorisierten Zugang
+         (siehe reference_loxone_radio_streampal_urls / CHANGELOG). Wer
+         diesen Bereich nicht gezielt aufsucht, stolpert nicht versehentlich
+         darüber. -->
+    <div class="card" style="border-color:#a35;">
+      <div class="card-title">Experimentell: Loxone-Radio für Sonn Core</div>
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:14px;">
+        Legt die 13 kuratierten Loxone-Radio-Sender als "Eigene Streams" bei
+        Sonn Core an (nur für Sonn Core relevant — ein echter Loxone
+        Audioserver hat diese Sender bereits selbst). Nutzt dafür einen von
+        Loxone/Streampal nicht offiziell freigegebenen Zugang — kann
+        jederzeit ohne Vorwarnung aufhören zu funktionieren, und ist nicht
+        für den produktiven/dauerhaften Einsatz gedacht. Nur zum eigenen
+        Testen verwenden, nicht großflächig/automatisiert abfragen.
+      </div>
+      <div class="row">
+        <div class="field"><label>Sonn-Core-Host (IP)</label><input type="text" id="s-loxone-radio-host" placeholder="192.168.179.14"></div>
+        <div class="field" style="max-width:220px;justify-content:flex-end;">
+          <label>&nbsp;</label>
+          <button type="button" class="btn btn-secondary" onclick="setupLoxoneRadio()">Sender einrichten</button>
+        </div>
+      </div>
+      <div id="loxone-radio-results" style="display:none;margin-top:8px;font-size:13px;"></div>
     </div>
   </div>
 
@@ -842,13 +854,21 @@ async function scanAudioZones() {
 }
 
 // ── Loxone-Radio-Sender (Streampal) in Sonn Core einrichten ──────
-// Gleiches Muster wie scanAudioZones() — fragt bridge.js' lokalen Server ab.
-// Idempotent (siehe bin/loxone_radio_setup.js), darf beliebig oft geklickt
-// werden, z.B. nach einer Sonn-Core-Neuinstallation.
+// Bewusst mit Bestätigungsdialog (nicht "ein Klick") — nutzt einen von
+// Loxone/Streampal nicht offiziell freigegebenen Zugang, siehe Hinweistext
+// in den Einstellungen. Gleiches Muster wie scanAudioZones() — fragt
+// bridge.js' lokalen Server ab. Idempotent (siehe bin/loxone_radio_setup.js),
+// darf beliebig oft geklickt werden, z.B. nach einer Sonn-Core-Neuinstallation.
 async function setupLoxoneRadio() {
-  const host = document.getElementById('p-audioserver-host').value.trim();
+  const host = document.getElementById('s-loxone-radio-host').value.trim();
   const box  = document.getElementById('loxone-radio-results');
-  if (!host) { toast('Erst Audioserver-Host eintragen', 'err'); return; }
+  if (!host) { toast('Erst Sonn-Core-Host eintragen', 'err'); return; }
+  const ok = confirm(
+    'Dieser Zugang ist von Loxone/Streampal nicht offiziell freigegeben und ' +
+    'kann jederzeit aufhören zu funktionieren. Nur zum eigenen Testen, nicht ' +
+    'automatisiert/häufig ausführen.\n\nJetzt trotzdem einrichten?'
+  );
+  if (!ok) return;
   box.style.display = 'block';
   box.innerHTML = 'Richte Sender ein … (kann einige Sekunden dauern)';
   try {

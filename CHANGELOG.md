@@ -2,21 +2,32 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-09-29 (2)
+
+### Sonstiges
+- **Loxone-Radio-Setup-Button verschoben + abgesichert**: aus dem
+  Panel-Editor (den jeder Nutzer beim Audiozonen-Einrichten sieht) in einen
+  eigenen "Experimentell"-Bereich der Einstellungen verschoben, plus
+  Bestätigungsdialog vor der Ausführung. Grund: der Sender-Zugang
+  (streampal.net `/play.cgi` ohne `/auth/`-Präfix) ist von Loxone/Streampal
+  nicht offiziell freigegeben (siehe unten) — soll nicht versehentlich von
+  Nutzern angeklickt werden, die nur eine Audio-Zone konfigurieren wollten.
+
 ## [Unreleased] - 2026-09-29
 
 ### Neu (Bridge)
-- **Loxone-Radio-Sender für Sonn Core**: neuer Button "Loxone-Radio-Sender
-  einrichten" im Panel-Editor (nur bei gesetztem Audioserver-Host sichtbar)
-  legt die 13 kuratierten Loxone-Radio-Sender einmalig zentral als "Eigene
-  Streams" bei Sonn Core an (`bin/loxone_radio_setup.js`, native
-  `audio/cfg/radios/add`-Befehl mit Base64url-JSON-Payload für Name/URL/
-  Cover-Art). Nur für Sonn Core relevant — ein echter Loxone Audioserver hat
-  diese Sender bereits über seinen eigenen, zertifikatsgeschützten Zugang.
-  Idempotent (prüft vorher `audio/cfg/getradios`, überspringt bereits
-  vorhandene Sender) — beliebig oft klickbar, z.B. nach einer
-  Sonn-Core-Neuinstallation. Nutzt den bestehenden authentifizierten
-  Steuerkanal (`audioserver_auth.js`) und dasselbe lokale-HTTP-Server/
-  Web-UI-Muster wie der bestehende "Zonen suchen"-Button.
+- **Loxone-Radio-Sender für Sonn Core** (experimentell, siehe Hinweis oben):
+  neuer Button "Sender einrichten" legt die 13 kuratierten Loxone-Radio-
+  Sender einmalig zentral als "Eigene Streams" bei Sonn Core an
+  (`bin/loxone_radio_setup.js`, nativer `audio/cfg/radios/add`-Befehl mit
+  Base64url-JSON-Payload für Name/URL/Cover-Art). Nur für Sonn Core relevant
+  — ein echter Loxone Audioserver hat diese Sender bereits über seinen
+  eigenen, zertifikatsgeschützten Zugang. Idempotent (prüft vorher
+  `audio/cfg/getradios`, überspringt bereits vorhandene Sender) — beliebig
+  oft klickbar, z.B. nach einer Sonn-Core-Neuinstallation. Nutzt den
+  bestehenden authentifizierten Steuerkanal (`audioserver_auth.js`) und
+  dasselbe lokale-HTTP-Server/Web-UI-Muster wie der bestehende
+  "Zonen suchen"-Button.
 
 ## [Unreleased] - 2026-09-28
 

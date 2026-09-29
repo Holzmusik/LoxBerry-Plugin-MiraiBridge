@@ -246,7 +246,7 @@ body.theme-glass-disabled .mp-app {
         <rect x="134" y="134" width="40" height="40" rx="10" fill="none" stroke="#F4FBF6" stroke-width="12"/>
         <rect x="82" y="186" width="40" height="40" rx="10" fill="none" stroke="#F4FBF6" stroke-width="12"/>
         <rect x="134" y="186" width="40" height="40" rx="10" fill="none" stroke="#F4FBF6" stroke-width="12"/>
-        <rect x="82" y="134" width="40" height="40" rx="10" fill="#8FE3B0"/>
+        <rect x="82" y="134" width="40" height="40" rx="10" fill="#7ddc4a"/>
       </svg>
       MiraiBridge
     </div>
@@ -377,6 +377,21 @@ body.theme-glass-disabled .mp-app {
           lassen, wenn der Audioserver/Sonn Core das MQTT-Publizieren schon
           selbst übernimmt. "Zonen suchen" braucht nur den Host oben (fragt
           kurz beim Audioserver an, ca. 3 Sekunden).
+        </div>
+        <div class="row">
+          <div class="field" style="max-width:280px;justify-content:flex-end;">
+            <label>&nbsp;</label>
+            <button type="button" class="btn btn-secondary" onclick="setupLoxoneRadio()">Loxone-Radio-Sender einrichten</button>
+          </div>
+        </div>
+        <div id="loxone-radio-results" style="display:none;margin:-4px 0 10px;font-size:13px;"></div>
+        <div style="font-size:12px;color:var(--txt2);margin:-6px 0 10px;">
+          Legt die 13 kuratierten Loxone-Radio-Sender einmalig als "Eigene
+          Streams" bei Sonn Core an (nur nötig für Sonn Core — ein echter
+          Loxone Audioserver hat diese Sender bereits selbst). Kann
+          gefahrlos mehrfach geklickt werden, z.B. nach einer Sonn-Core-
+          Neuinstallation — bereits vorhandene Sender werden übersprungen.
+          Braucht nur den Audioserver-Host oben, dauert einige Sekunden.
         </div>
         <div class="row">
           <div class="field"><label>Schlaf-Steuerung (Schalter)</label><input type="text" list="switch-control-datalist" id="p-sleep-cmd"></div>
@@ -823,6 +838,28 @@ async function scanAudioZones() {
     });
   } catch(e) {
     box.innerHTML = 'Fehler: ' + e.message;
+  }
+}
+
+// ── Loxone-Radio-Sender (Streampal) in Sonn Core einrichten ──────
+// Gleiches Muster wie scanAudioZones() — fragt bridge.js' lokalen Server ab.
+// Idempotent (siehe bin/loxone_radio_setup.js), darf beliebig oft geklickt
+// werden, z.B. nach einer Sonn-Core-Neuinstallation.
+async function setupLoxoneRadio() {
+  const host = document.getElementById('p-audioserver-host').value.trim();
+  const box  = document.getElementById('loxone-radio-results');
+  if (!host) { toast('Erst Audioserver-Host eintragen', 'err'); return; }
+  box.style.display = 'block';
+  box.innerHTML = 'Richte Sender ein … (kann einige Sekunden dauern)';
+  try {
+    const r = await api('setup_loxone_radio', 'POST', { host });
+    let msg = `${r.added.length} neu angelegt, ${r.skipped.length} bereits vorhanden`;
+    if (r.errors && r.errors.length) msg += `, ${r.errors.length} Fehler`;
+    box.innerHTML = msg;
+    toast(msg, r.errors && r.errors.length ? 'err' : 'ok');
+  } catch(e) {
+    box.innerHTML = 'Fehler: ' + e.message;
+    toast('Fehler: ' + e.message, 'err');
   }
 }
 

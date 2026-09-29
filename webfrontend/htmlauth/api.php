@@ -493,6 +493,25 @@ switch ($action) {
         echo $result;
         break;
 
+    // ── Loxone-Radio-Sender (Streampal) in Sonn Core einrichten ─────────────
+    // Legt die 13 kuratierten Loxone-Radio-Sender zentral als "Eigene
+    // Streams" an (idempotent, siehe bin/loxone_radio_setup.js) — z.B. nach
+    // einer Sonn-Core-Neuinstallation per Knopfdruck erneut auslösbar.
+    // Gleiches Muster wie scan_audio_zones oben: fragt bridge.js' lokalen
+    // Server ab statt selbst eine WS-Verbindung aufzubauen.
+    case 'setup_loxone_radio':
+        $host = trim($body['host'] ?? '');
+        $port = (int)($body['port'] ?? 7091);
+        if ($host === '') err('Audioserver-Host fehlt');
+        $url = 'http://127.0.0.1:17091/setup-loxone-radio?host=' . urlencode($host) . '&port=' . $port;
+        // Grosszuegiges Timeout: 13 Sender x ~400ms Pause + Verbindungsaufbau/Auth.
+        $ctx = stream_context_create(['http' => ['timeout' => 20]]);
+        $result = @file_get_contents($url, false, $ctx);
+        if ($result === false) err('Bridge nicht erreichbar — läuft der Dienst?', 502, 'ERR');
+        header('Content-Type: application/json');
+        echo $result;
+        break;
+
     default:
         err('Unbekannte Aktion', 404);
 }

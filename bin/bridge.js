@@ -6,6 +6,7 @@ const http = require('http');
 const mqtt = require('mqtt');
 const { getAudioserverClient } = require('./audioserver');
 const { getAudioserverControlClient } = require('./audioserver_auth');
+const { setupLoxoneRadioStreams } = require('./loxone_radio_setup');
 const loxberrylog = require('./loxberrylog');
 
 // ── Pfade: LoxBerry vs. lokale Entwicklung ─────────────────
@@ -791,36 +792,84 @@ const ZONE_SCAN_PORT = 17091;
 function startZoneScanServer(port) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
-    if (url.pathname !== '/scan-zones') {
-      res.writeHead(404);
-      res.end();
-      return;
-    }
-    const host = url.searchParams.get('host');
-    const wsPort = parseInt(url.searchParams.get('port'), 10) || 7091;
-    if (!host) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'host fehlt' }));
+
+    if (url.pathname === '/scan-zones') {
+      const host = url.searchParams.get('host');
+      const wsPort = parseInt(url.searchParams.get('port'), 10) || 7091;
+      if (!host) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'host fehlt' }));
+        return;
+      }
+
+      console.log(`[scan] Zonen-Suche gestartet: ${host}:${wsPort}`);
+      const client = getAudioserverClient(host, wsPort);
+
+      // Aus dem Zonen-Cache lesen (getKnownZones()), nicht auf frische 'zone'-
+      // Events warten: bei einer schon länger laufenden Verbindung (z.B. weil
+      // eine konfigurierte Zone dieselbe Verbindung schon nutzt) kommen sonst
+      // nur für gerade AKTIV spielende Zonen neue Events — ruhige/pausierte
+      // Zonen wären unsichtbar, obwohl der Cache sie längst kennt (auf
+      // Hardware beobachtet 2026-09-10: nur 1 von 4 Zonen gefunden). Trotzdem
+      // kurz warten, falls die Verbindung gerade erst neu aufgebaut wird und
+      // den initialen Dump noch nicht empfangen hat.
+      setTimeout(() => {
+        const result = client.getKnownZones().sort((a, b) => a.playerid - b.playerid);
+        console.log(`[scan] ${result.length} Zone(n) gefunden für ${host}:${wsPort}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      }, 3000);
       return;
     }
 
-    console.log(`[scan] Zonen-Suche gestartet: ${host}:${wsPort}`);
-    const client = getAudioserverClient(host, wsPort);
+    // ── Loxone-Radio-Sender (Streampal) per Knopfdruck in Sonn Core einrichten ─
+    // Zentrale, einmalige/wiederholbare Registrierung (siehe
+    // loxone_radio_setup.js) — z.B. nach einer Sonn-Core-Neuinstallation
+    // erneut auslösbar, ohne Dubletten (Idempotenz-Check dort). msno kommt
+    // NICHT aus dem Web-UI (panel.audioserver_msno ist dort bisher nicht
+    // editierbar) — Fallback auf cfg.loxone.msno, exakt wie in
+    // setupAudioZones() oben.
+    if (url.pathname === '/setup-loxone-radio') {
+      const host = url.searchParams.get('host');
+      const wsPort = parseInt(url.searchParams.get('port'), 10) || 7091;
+      const msnoParam = url.searchParams.get('msno');
+      const msno = msnoParam || (cfg.loxone && cfg.loxone.msno);
+      if (!host) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'host fehlt' }));
+        return;
+      }
+      if (!msno) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Kein Miniserver konfiguriert (cfg.loxone.msno)' }));
+        return;
+      }
 
-    // Aus dem Zonen-Cache lesen (getKnownZones()), nicht auf frische 'zone'-
-    // Events warten: bei einer schon länger laufenden Verbindung (z.B. weil
-    // eine konfigurierte Zone dieselbe Verbindung schon nutzt) kommen sonst
-    // nur für gerade AKTIV spielende Zonen neue Events — ruhige/pausierte
-    // Zonen wären unsichtbar, obwohl der Cache sie längst kennt (auf
-    // Hardware beobachtet 2026-09-10: nur 1 von 4 Zonen gefunden). Trotzdem
-    // kurz warten, falls die Verbindung gerade erst neu aufgebaut wird und
-    // den initialen Dump noch nicht empfangen hat.
-    setTimeout(() => {
-      const result = client.getKnownZones().sort((a, b) => a.playerid - b.playerid);
-      console.log(`[scan] ${result.length} Zone(n) gefunden für ${host}:${wsPort}`);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(result));
-    }, 3000);
+      console.log(`[loxone-radio-setup] Gestartet: ${host}:${wsPort} (Miniserver #${msno})`);
+      let msConn;
+      try {
+        msConn = loadMiniserverConn(msno);
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `Miniserver #${msno} nicht ladbar: ${e.message}` }));
+        return;
+      }
+      setupLoxoneRadioStreams(host, wsPort, msConn)
+        .then((result) => {
+          console.log(`[loxone-radio-setup] Fertig: ${result.added.length} neu, ${result.skipped.length} vorhanden, ${result.errors.length} Fehler`);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        })
+        .catch((e) => {
+          console.error('[loxone-radio-setup] Fehlgeschlagen:', e.message);
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: e.message }));
+        });
+      return;
+    }
+
+    res.writeHead(404);
+    res.end();
   });
   server.on('error', (e) => console.error('[scan] Server-Fehler:', e.message));
   server.listen(port, '127.0.0.1', () => console.log(`[scan] Zonen-Scan-Server auf 127.0.0.1:${port}`));

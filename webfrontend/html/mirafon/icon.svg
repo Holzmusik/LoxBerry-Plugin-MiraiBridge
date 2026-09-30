@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#155C40"/>
+      <stop offset="1" stop-color="#0E3B2E"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <!-- Mikrofon-Kapsel -->
+  <rect x="112" y="70" width="32" height="70" rx="16" fill="#F4FBF6"/>
+  <path d="M 92 118 A 36 36 0 0 0 164 118" fill="none" stroke="#F4FBF6" stroke-width="10" stroke-linecap="round"/>
+  <line x1="128" y1="154" x2="128" y2="176" stroke="#F4FBF6" stroke-width="10" stroke-linecap="round"/>
+  <line x1="104" y1="176" x2="152" y2="176" stroke="#F4FBF6" stroke-width="10" stroke-linecap="round"/>
+  <!-- Funk-/Streaming-Bögen, wie beim MiraiPanel-Icon -->
+  <path d="M 172 96 A 42 42 0 0 1 172 148" fill="none" stroke="#7ddc4a" stroke-width="9" stroke-linecap="round"/>
+  <path d="M 188 82 A 62 62 0 0 1 188 162" fill="none" stroke="#7ddc4a" stroke-width="9" stroke-linecap="round" opacity="0.6"/>
+</svg>

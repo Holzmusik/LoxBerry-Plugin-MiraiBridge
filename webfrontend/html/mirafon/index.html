@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>MiraiFon</title>
+<meta name="theme-color" content="#0e0e0e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f2f2" media="(prefers-color-scheme: light)">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+/* Farbschema 1:1 aus MiraiPanel-LCD/web_ui/index.html uebernommen, damit
+   sich MiraiFon optisch als Teil desselben Mirai-Oekosystems anfuehlt.
+   Anders als dort (manueller data-theme-Umschalter) folgt MiraiFon hier von
+   Anfang an automatisch dem OS-Hell/Dunkel-Modus (prefers-color-scheme) -
+   Handy-Apps werden von Nutzern eher darueber erwartet als ein eigener
+   In-App-Umschalter. */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0e0e0e;--s1:#1a1a1a;--s2:#242424;--s3:#2e2e2e;
+  --acc:#66CD00;--txt:#d8d8d8;--txt2:#888;--brd:#333;
+  --ok:#4CAF50;--err:#f44336;--warn:#FF9800;
+  --shadow:0 2px 8px rgba(0,0,0,.45);
+}
+@media (prefers-color-scheme: light) {
+  :root{
+    --bg:#f2f2f2;--s1:#ffffff;--s2:#eeeeee;--s3:#e2e2e2;
+    --acc:#4a9900;--txt:#1a1a1a;--txt2:#666;--brd:#ddd;
+    --ok:#2e7d32;--err:#c62828;--warn:#e65100;
+    --shadow:0 2px 10px rgba(0,0,0,.1);
+  }
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;
+     min-height:100dvh;padding-bottom:env(safe-area-inset-bottom)}
+
+header{background:var(--s1);border-bottom:1px solid var(--brd);padding:0 18px;
+       padding-top:env(safe-area-inset-top);display:flex;align-items:center;gap:12px;
+       height:calc(52px + env(safe-area-inset-top));position:sticky;top:0;z-index:100}
+header h1{font-size:16px;font-weight:700;color:var(--acc);letter-spacing:.5px}
+header button.icon-btn{margin-left:auto}
+
+main{max-width:520px;margin:0 auto;padding:16px}
+.screen{display:none}
+.screen.active{display:block}
+
+/* ── Panel-Liste ─────────────────────────────────────────── */
+.panel-card{background:var(--s1);border:1px solid var(--brd);border-radius:12px;
+            padding:16px 18px;margin-bottom:12px;display:flex;align-items:center;
+            gap:14px;cursor:pointer;box-shadow:var(--shadow);transition:border-color .15s}
+.panel-card:active{border-color:var(--acc)}
+.panel-card .room{font-size:16px;font-weight:600;color:var(--txt)}
+.panel-card .host{font-size:12px;color:var(--txt2);margin-top:2px}
+.panel-card .dot{width:10px;height:10px;border-radius:50%;background:var(--txt2);flex-shrink:0}
+.panel-card .dot.ok{background:var(--ok)}
+.empty-hint{color:var(--txt2);font-size:14px;text-align:center;padding:40px 20px;line-height:1.6}
+
+.fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));
+     width:56px;height:56px;border-radius:50%;background:var(--acc);color:#0e0e0e;
+     border:none;font-size:28px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.4);
+     cursor:pointer;line-height:1}
+
+/* ── Formular (Panel hinzufuegen/bearbeiten) ────────────────── */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:6px}
+.field input{width:100%;background:var(--s2);border:1px solid var(--brd);border-radius:8px;
+             color:var(--txt);padding:11px 12px;font-size:15px;outline:none;font-family:inherit}
+.field input:focus{border-color:var(--acc)}
+.field-row{display:flex;gap:10px}
+.field-row .field{flex:1}
+.hint{font-size:12px;color:var(--txt2);margin:-8px 0 16px;line-height:1.5}
+
+.btn{padding:12px 20px;border:none;border-radius:8px;font-size:14px;font-weight:600;
+     cursor:pointer;width:100%;margin-bottom:10px}
+.btn-primary{background:var(--acc);color:#0e0e0e}
+.btn-ghost{background:var(--s2);color:var(--txt);border:1px solid var(--brd)}
+.btn-danger{background:transparent;color:var(--err)}
+.icon-btn{background:none;border:none;color:var(--txt2);font-size:20px;cursor:pointer;padding:6px}
+
+/* ── Player ──────────────────────────────────────────────── */
+.player-room{font-size:22px;font-weight:700;text-align:center;margin:18px 0 6px}
+.player-status{font-size:13px;color:var(--txt2);text-align:center;margin-bottom:30px}
+.player-status.ok{color:var(--ok)}
+.player-status.err{color:var(--err)}
+
+.rec-indicator{width:14px;height:14px;border-radius:50%;background:var(--err);
+                display:inline-block;margin-right:6px;animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.stream-toggle{width:140px;height:140px;border-radius:50%;border:none;margin:10px auto;
+                display:block;font-size:15px;font-weight:700;cursor:pointer;
+                background:var(--s2);color:var(--txt);border:2px solid var(--brd)}
+.stream-toggle.live{background:var(--err);color:#fff;border-color:var(--err)}
+
+.volume-block{margin-top:40px}
+.volume-block label{display:flex;justify-content:space-between;font-size:13px;
+                     color:var(--txt2);margin-bottom:10px}
+input[type=range]{width:100%;accent-color:var(--acc);height:28px}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+       background:var(--s3);color:var(--txt);padding:10px 18px;border-radius:8px;
+       font-size:13px;box-shadow:var(--shadow);z-index:200;opacity:0;
+       transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header>
+  <button class="icon-btn" id="btn-back" style="visibility:hidden">‹</button>
+  <h1 id="header-title">MiraiFon</h1>
+</header>
+
+<main>
+
+  <!-- ══════════ Screen: Panel-Liste ══════════ -->
+  <section class="screen active" id="screen-list">
+    <div id="panel-list"></div>
+    <div class="empty-hint" id="empty-hint" style="display:none">
+      Noch kein Panel gekoppelt.<br>Tippe unten auf "+", um eines hinzuzufügen.
+    </div>
+  </section>
+
+  <!-- ══════════ Screen: Panel hinzufuegen/bearbeiten ══════════ -->
+  <!-- QR-Kopplung folgt, sobald das Panel einen Pairing-QR-Code anzeigen kann
+       (siehe Projekt-Notizen) - bis dahin/als Fallback: manuelle Eingabe. -->
+  <section class="screen" id="screen-edit">
+    <div class="field">
+      <label>Raumname</label>
+      <input type="text" id="f-room" placeholder="Kinderzimmer">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Host / IP</label>
+        <input type="text" id="f-host" placeholder="192.168.179.55">
+      </div>
+      <div class="field" style="flex:0 0 90px">
+        <label>Port</label>
+        <input type="number" id="f-port" value="5000">
+      </div>
+    </div>
+    <div class="field">
+      <label>Auth-Token</label>
+      <input type="text" id="f-token" placeholder="vom Panel">
+    </div>
+    <p class="hint">
+      Diese Werte kommen später automatisch per QR-Code-Kopplung direkt vom
+      Panel-Display. Bis dahin: im Panel unter Einstellungen &rarr; Netzwerk
+      nachsehen (gleiche IP wie die Web-Oberfläche des Panels) und das
+      Auth-Token dort übernehmen.
+    </p>
+    <button class="btn btn-primary" id="btn-save">Speichern</button>
+    <button class="btn btn-ghost" id="btn-cancel">Abbrechen</button>
+    <button class="btn btn-danger" id="btn-delete" style="display:none">Panel entfernen</button>
+  </section>
+
+  <!-- ══════════ Screen: Player ══════════ -->
+  <section class="screen" id="screen-player">
+    <div class="player-room" id="p-room">—</div>
+    <div class="player-status" id="p-status">Nicht verbunden</div>
+
+    <button class="stream-toggle" id="btn-toggle-stream">Start</button>
+
+    <div class="volume-block">
+      <label><span>Lautstärke</span><span id="p-vol-val">100%</span></label>
+      <input type="range" id="p-volume" min="0" max="200" value="100">
+    </div>
+  </section>
+
+</main>
+
+<button class="fab" id="btn-add">+</button>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────────
+// Panels: [{id, room, host, port, token}] — persistiert lokal auf dem Handy.
+// Spaeter ersetzt/ergaenzt die QR-Kopplung nur das WIE ein Eintrag entsteht,
+// die Datenstruktur selbst bleibt gleich.
+let panels = JSON.parse(localStorage.getItem('miraifon_panels') || '[]');
+let editingId = null;   // Panel-Id, das gerade bearbeitet wird (null = neu)
+let activePanel = null; // Panel-Id, das gerade im Player-Screen offen ist
+
+function savePanels() {
+  localStorage.setItem('miraifon_panels', JSON.stringify(panels));
+}
+
+// ── Screen-Navigation ──────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const back = document.getElementById('btn-back');
+  const title = document.getElementById('header-title');
+  if (id === 'screen-list') {
+    back.style.visibility = 'hidden';
+    title.textContent = 'MiraiFon';
+  } else if (id === 'screen-edit') {
+    back.style.visibility = 'visible';
+    title.textContent = editingId ? 'Panel bearbeiten' : 'Panel hinzufügen';
+  } else if (id === 'screen-player') {
+    back.style.visibility = 'visible';
+    title.textContent = 'Babyfon';
+  }
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── Panel-Liste rendern ────────────────────────────────────
+function renderList() {
+  const list = document.getElementById('panel-list');
+  list.innerHTML = '';
+  document.getElementById('empty-hint').style.display = panels.length ? 'none' : 'block';
+  panels.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'panel-card';
+    card.innerHTML = `
+      <div class="dot"></div>
+      <div style="flex:1">
+        <div class="room">${escapeHtml(p.room)}</div>
+        <div class="host">${escapeHtml(p.host)}:${p.port}</div>
+      </div>
+      <button class="icon-btn edit-btn" data-id="${p.id}">⚙</button>
+    `;
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.edit-btn')) return;
+      openPlayer(p.id);
+    });
+    card.querySelector('.edit-btn').addEventListener('click', () => openEdit(p.id));
+    list.appendChild(card);
+  });
+}
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ── Panel hinzufuegen/bearbeiten ───────────────────────────
+function openEdit(id) {
+  editingId = id || null;
+  const p = editingId ? panels.find(x => x.id === editingId) : null;
+  document.getElementById('f-room').value  = p ? p.room  : '';
+  document.getElementById('f-host').value  = p ? p.host  : '';
+  document.getElementById('f-port').value  = p ? p.port  : 5000;
+  document.getElementById('f-token').value = p ? p.token : '';
+  document.getElementById('btn-delete').style.display = p ? 'block' : 'none';
+  showScreen('screen-edit');
+}
+
+document.getElementById('btn-add').addEventListener('click', () => openEdit(null));
+document.getElementById('btn-cancel').addEventListener('click', () => showScreen('screen-list'));
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  const room  = document.getElementById('f-room').value.trim();
+  const host  = document.getElementById('f-host').value.trim();
+  const port  = parseInt(document.getElementById('f-port').value, 10) || 5000;
+  const token = document.getElementById('f-token').value.trim();
+  if (!room || !host) { toast('Raumname und Host/IP werden benötigt'); return; }
+
+  if (editingId) {
+    const p = panels.find(x => x.id === editingId);
+    Object.assign(p, { room, host, port, token });
+  } else {
+    panels.push({ id: 'p' + Date.now(), room, host, port, token });
+  }
+  savePanels();
+  renderList();
+  showScreen('screen-list');
+});
+
+document.getElementById('btn-delete').addEventListener('click', () => {
+  panels = panels.filter(x => x.id !== editingId);
+  savePanels();
+  renderList();
+  showScreen('screen-list');
+});
+
+document.getElementById('btn-back').addEventListener('click', () => {
+  stopStream();
+  showScreen('screen-list');
+});
+
+// ── Player: Audio-Streaming ────────────────────────────────
+// PROTOKOLL (panel-seitig noch zu bauen, siehe Projekt-Notizen "Babyfon-App"):
+// WebSocket ws://<host>:<port>/api/babyfon/stream?token=<token>
+// Server -> Client: binaere Frames, roh PCM s16le, Stereo, 44100 Hz
+// (exakt das Format, das das Panel schon fuer den Sonn-Core-Ingest erzeugt
+// - siehe custom-components/babymonitor_stream.h - liesse sich dort also
+// direkt wiederverwenden statt eine zweite Konvertierung zu bauen).
+// Lautstaerke wird NICHT zum Panel zurueckgeschickt, sondern rein lokal im
+// Handy per GainNode angewendet - kein Roundtrip noetig, keine Serverlast.
+
+let ws = null;
+let audioCtx = null;
+let gainNode = null;
+let nextStartTime = 0;
+const SAMPLE_RATE = 44100;
+
+function openPlayer(id) {
+  activePanel = id;
+  const p = panels.find(x => x.id === id);
+  document.getElementById('p-room').textContent = p.room;
+  document.getElementById('p-status').textContent = 'Nicht verbunden';
+  document.getElementById('p-status').className = 'player-status';
+  document.getElementById('btn-toggle-stream').textContent = 'Start';
+  document.getElementById('btn-toggle-stream').classList.remove('live');
+  showScreen('screen-player');
+}
+
+document.getElementById('btn-toggle-stream').addEventListener('click', () => {
+  if (ws) stopStream(); else startStream();
+});
+
+document.getElementById('p-volume').addEventListener('input', (e) => {
+  document.getElementById('p-vol-val').textContent = e.target.value + '%';
+  if (gainNode) gainNode.gain.value = e.target.value / 100;
+});
+
+function startStream() {
+  const p = panels.find(x => x.id === activePanel);
+  if (!p) return;
+
+  // AudioContext MUSS innerhalb einer Nutzer-Geste erzeugt/fortgesetzt werden
+  // (iOS Safari blockt sonst Audioausgabe) - der Start-Button-Klick liefert
+  // genau diese Geste.
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = document.getElementById('p-volume').value / 100;
+  gainNode.connect(audioCtx.destination);
+  nextStartTime = audioCtx.currentTime;
+
+  const url = `ws://${p.host}:${p.port}/api/babyfon/stream?token=${encodeURIComponent(p.token)}`;
+  ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
+
+  setStatus('Verbinde…', '');
+
+  ws.onopen = () => setStatus('Verbunden', 'ok');
+  ws.onclose = () => { setStatus('Verbindung getrennt', 'err'); resetToggle(); };
+  ws.onerror = () => { setStatus('Verbindung fehlgeschlagen', 'err'); resetToggle(); };
+  ws.onmessage = (ev) => {
+    if (typeof ev.data === 'string') return; // Text-Frames (Status o.ae.) ignorieren wir hier
+    playPcmChunk(ev.data);
+  };
+
+  document.getElementById('btn-toggle-stream').textContent = 'Stop';
+  document.getElementById('btn-toggle-stream').classList.add('live');
+}
+
+function stopStream() {
+  if (ws) { ws.onclose = null; ws.close(); ws = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; gainNode = null; }
+  resetToggle();
+  setStatus('Nicht verbunden', '');
+}
+function resetToggle() {
+  document.getElementById('btn-toggle-stream').textContent = 'Start';
+  document.getElementById('btn-toggle-stream').classList.remove('live');
+}
+function setStatus(text, cls) {
+  const el = document.getElementById('p-status');
+  el.textContent = text;
+  el.className = 'player-status' + (cls ? ' ' + cls : '');
+}
+
+// Interleaved Int16 Stereo-PCM -> AudioBuffer, lueckenlos hintereinander
+// eingeplant (klassisches Muster fuer PCM-Streaming per WebSocket ohne
+// AudioWorklet). Bei Netzwerk-Ruckler (nextStartTime faellt zu weit hinter
+// currentTime zurueck) wird die Planung auf "jetzt" zurueckgesetzt, statt
+// unbegrenzt Verzoegerung aufzubauen.
+function playPcmChunk(buf) {
+  if (!audioCtx) return;
+  const view = new DataView(buf);
+  const frameCount = buf.byteLength / 4; // 4 Byte/Frame: 2 Kanaele * 2 Byte
+  if (frameCount <= 0) return;
+
+  const audioBuf = audioCtx.createBuffer(2, frameCount, SAMPLE_RATE);
+  const left = audioBuf.getChannelData(0);
+  const right = audioBuf.getChannelData(1);
+  for (let i = 0; i < frameCount; i++) {
+    left[i]  = view.getInt16(i * 4,     true) / 32768;
+    right[i] = view.getInt16(i * 4 + 2, true) / 32768;
+  }
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = audioBuf;
+  src.connect(gainNode);
+
+  const now = audioCtx.currentTime;
+  if (nextStartTime < now) nextStartTime = now; // Ruckler: Aufholjagd abbrechen
+  src.start(nextStartTime);
+  nextStartTime += audioBuf.duration;
+}
+
+// ── Init ───────────────────────────────────────────────────
+renderList();
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

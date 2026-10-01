@@ -104,6 +104,12 @@ input[type=range]{width:100%;accent-color:var(--acc);height:28px}
        font-size:13px;box-shadow:var(--shadow);z-index:200;opacity:0;
        transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
+
+.alert-banner{display:none;margin:0 0 20px;padding:14px 18px;border-radius:10px;
+              background:var(--err);color:#fff;font-size:14px;font-weight:700;
+              text-align:center;cursor:pointer;animation:alert-pulse 1s infinite}
+.alert-banner.show{display:block}
+@keyframes alert-pulse{0%,100%{opacity:1}50%{opacity:.6}}
 </style>
 </head>
 <body>
@@ -160,6 +166,13 @@ input[type=range]{width:100%;accent-color:var(--acc);height:28px}
   <section class="screen" id="screen-player">
     <div class="player-room" id="p-room">—</div>
     <div class="player-status" id="p-status">Nicht verbunden</div>
+
+    <!-- Lautstaerke-Warnung vom Panel (siehe babyfon_stream.h check_alert_())
+         - per Default versteckt, wird bei eingehender {"type":"alert"}
+         Text-Nachricht kurz eingeblendet. -->
+    <div class="alert-banner" id="alert-banner" onclick="this.classList.remove('show')">
+      ⚠ Laute Geräusche erkannt
+    </div>
 
     <button class="stream-toggle" id="btn-toggle-stream">Start</button>
 
@@ -369,9 +382,44 @@ function startStream() {
   ws.onclose = () => { clearTimeout(connectTimeout); setStatus('Verbindung getrennt', 'err'); resetToggle(); };
   ws.onerror = () => { clearTimeout(connectTimeout); setStatus('Verbindung fehlgeschlagen', 'err'); resetToggle(); };
   ws.onmessage = (ev) => {
-    if (typeof ev.data === 'string') return; // Text-Frames (Status o.ae.) ignorieren wir hier
+    if (typeof ev.data === 'string') { handleTextMessage(ev.data); return; }
     playPcmChunk(ev.data);
   };
+
+  // Einmalig fragen, nicht bei jedem Start erneut - Browser ignorieren einen
+  // wiederholten Request nach einer Ablehnung eh stillschweigend, aber ein
+  // erneuter Prompt direkt nach "Start" waere trotzdem nervig. Erfordert eine
+  // Nutzer-Geste (der Start-Klick liefert die).
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+// Lautstaerke-Warnung vom Panel (siehe babyfon_stream.h check_alert_(),
+// sendet {"type":"alert","rms":...} als Text-Frame ueber dieselbe
+// WebSocket-Verbindung wie die Audiodaten - kein separater Push-Dienst noetig,
+// funktioniert aber nur solange die App aktiv verbunden ist (kein
+// Hintergrund-/Sperrbildschirm-Fall, das waere Phase 2 mit echtem Web Push).
+function handleTextMessage(raw) {
+  let msg;
+  try { msg = JSON.parse(raw); } catch (e) { return; }
+  if (msg.type !== 'alert') return;
+
+  const banner = document.getElementById('alert-banner');
+  banner.classList.add('show');
+  clearTimeout(handleTextMessage._hideTimer);
+  handleTextMessage._hideTimer = setTimeout(() => banner.classList.remove('show'), 10000);
+
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification('MiraiFon Babyphone', {
+        body: 'Laute Geräusche erkannt',
+        tag: 'babyfon-alert',  // ersetzt eine evtl. noch offene vorherige Benachrichtigung statt zu stapeln
+      });
+    } catch (e) { /* manche Browser werfen hier ausserhalb eines Service-Workers */ }
+  }
 }
 
 function stopStream() {

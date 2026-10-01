@@ -340,18 +340,38 @@ function startStream() {
   ws = new WebSocket(url);
   ws.binaryType = 'arraybuffer';
 
+  // Der Button zeigt bewusst ERST "Stop"/rot, wenn onopen WIRKLICH gefeuert hat
+  // - vorher stand er sofort auf "Stop", unabhaengig davon ob die Verbindung
+  // ueberhaupt zustande kam. Das hat beim Debuggen (2026-09-30/10-01) dazu
+  // gefuehrt, dass eine fehlgeschlagene Verbindung als "verbunden" missverstanden
+  // wurde, weil der auffaellige rote Button schon stand, bevor der kleine
+  // Status-Text darunter den echten (Fehler-)Zustand zeigte.
+  document.getElementById('btn-toggle-stream').textContent = 'Verbinde…';
   setStatus('Verbinde…', '');
 
-  ws.onopen = () => setStatus('Verbunden', 'ok');
-  ws.onclose = () => { setStatus('Verbindung getrennt', 'err'); resetToggle(); };
-  ws.onerror = () => { setStatus('Verbindung fehlgeschlagen', 'err'); resetToggle(); };
+  // Browser lassen eine WebSocket-Verbindung u.U. SEHR lange "pending" haengen,
+  // bevor sie selbst aufgeben (siehe Diagnose zu unerreichbaren Hosts) - eigener
+  // Timeout, damit das nicht wie "funktioniert vielleicht noch" aussieht.
+  const connectTimeout = setTimeout(() => {
+    if (ws && ws.readyState === WebSocket.CONNECTING) {
+      setStatus('Keine Antwort vom Panel (Timeout)', 'err');
+      ws.close();
+    }
+  }, 8000);
+
+  ws.onopen = () => {
+    clearTimeout(connectTimeout);
+    bytesReceivedTotal = 0;
+    setStatus('Verbunden', 'ok');
+    document.getElementById('btn-toggle-stream').textContent = 'Stop';
+    document.getElementById('btn-toggle-stream').classList.add('live');
+  };
+  ws.onclose = () => { clearTimeout(connectTimeout); setStatus('Verbindung getrennt', 'err'); resetToggle(); };
+  ws.onerror = () => { clearTimeout(connectTimeout); setStatus('Verbindung fehlgeschlagen', 'err'); resetToggle(); };
   ws.onmessage = (ev) => {
     if (typeof ev.data === 'string') return; // Text-Frames (Status o.ae.) ignorieren wir hier
     playPcmChunk(ev.data);
   };
-
-  document.getElementById('btn-toggle-stream').textContent = 'Stop';
-  document.getElementById('btn-toggle-stream').classList.add('live');
 }
 
 function stopStream() {
@@ -375,11 +395,19 @@ function setStatus(text, cls) {
 // AudioWorklet). Bei Netzwerk-Ruckler (nextStartTime faellt zu weit hinter
 // currentTime zurueck) wird die Planung auf "jetzt" zurueckgesetzt, statt
 // unbegrenzt Verzoegerung aufzubauen.
+let bytesReceivedTotal = 0;
 function playPcmChunk(buf) {
   if (!audioCtx) return;
   const view = new DataView(buf);
   const frameCount = buf.byteLength / 4; // 4 Byte/Frame: 2 Kanaele * 2 Byte
   if (frameCount <= 0) return;
+
+  // Sichtbarer Beweis, dass ueberhaupt Daten ankommen - unabhaengig davon, ob
+  // man sie hoert. Hilft genau die Frage zu beantworten, die beim Debuggen
+  // 2026-09-30/10-01 offen blieb: kommt am Panel/in der App ueberhaupt etwas
+  // an, oder haengt es schon vorher?
+  bytesReceivedTotal += buf.byteLength;
+  setStatus(`Verbunden — ${(bytesReceivedTotal / 1024).toFixed(0)} KB empfangen`, 'ok');
 
   const audioBuf = audioCtx.createBuffer(2, frameCount, SAMPLE_RATE);
   const left = audioBuf.getChannelData(0);

@@ -338,7 +338,13 @@ async function startQrScan() {
   const statusEl = document.getElementById('scan-status');
 
   if (!('BarcodeDetector' in window)) {
-    statusEl.textContent = 'QR-Scan wird von diesem Browser leider nicht unterstützt — bitte unten manuell eintragen.';
+    // Haeufigster Grund: Kamera-API braucht einen sicheren Kontext (HTTPS) -
+    // auf http:// existiert window.BarcodeDetector schlicht nicht, auch in
+    // Browsern die es grundsaetzlich koennten. location.protocol verraet,
+    // ob genau DAS der Grund ist, statt "nicht unterstuetzt" zu raten.
+    statusEl.textContent = location.protocol !== 'https:'
+      ? 'QR-Scan braucht HTTPS — bitte diese Seite über https:// öffnen (nicht :8443, das ist nur für den Audio-Stream), dann erneut versuchen. Bis dahin unten manuell eintragen.'
+      : 'QR-Scan wird von diesem Browser leider nicht unterstützt — bitte unten manuell eintragen.';
     return;
   }
   if (!barcodeDetector) {

@@ -3,6 +3,9 @@
 const fs   = require('fs');
 const path = require('path');
 const http = require('http');
+const https = require('https');
+const { execFileSync } = require('child_process');
+const WebSocket = require('ws');
 const mqtt = require('mqtt');
 const { getAudioserverClient } = require('./audioserver');
 const { getAudioserverControlClient } = require('./audioserver_auth');
@@ -876,6 +879,108 @@ function startZoneScanServer(port) {
 }
 
 startZoneScanServer(ZONE_SCAN_PORT);
+
+// ── WSS-Proxy fuers Babyphone (MiraiFon-App) ──────────────────────────────
+// Das Panel spricht nur Klartext-ws:// (siehe MiraiPanel-LCD,
+// custom-components/babyfon_stream.h) — das reicht fuers Audio im LAN, aber
+// sobald die App selbst ueber HTTPS laeuft (noetig fuer Benachrichtigungen/
+// Kamera-QR-Scan), wuerde der Browser eine Klartext-ws://-Verbindung als
+// Mixed Content blockieren. Dieser Proxy terminiert TLS auf dem LoxBerry
+// (selbstsigniertes Zertifikat, Browser fragt beim ersten Mal einmalig nach
+// Vertrauen) und reicht alles unveraendert als Klartext-ws:// ans Panel
+// weiter — am Panel selbst aendert sich dafuer nichts. 2026-10-01.
+const WSS_PROXY_PORT = 8443;
+const WSS_CERT_DIR = path.join(PATHS.data, 'ssl');
+
+function ensureProxyCert() {
+  const certFile = path.join(WSS_CERT_DIR, 'wss-proxy.crt');
+  const keyFile  = path.join(WSS_CERT_DIR, 'wss-proxy.key');
+  if (fs.existsSync(certFile) && fs.existsSync(keyFile)) {
+    return { cert: fs.readFileSync(certFile), key: fs.readFileSync(keyFile) };
+  }
+  fs.mkdirSync(WSS_CERT_DIR, { recursive: true });
+  console.log('[wss-proxy] Erzeuge einmaliges selbstsigniertes Zertifikat...');
+  // -days 3650 (10 Jahre): bewusst lang, da das Zertifikat sowieso nie von
+  // einer oeffentlichen CA signiert/validiert wird — der Browser muss ihm
+  // ohnehin einmalig manuell vertrauen, ein kurzes Ablaufdatum brächte hier
+  // keinen Sicherheitsgewinn, nur wiederkehrenden Aerger.
+  execFileSync('openssl', [
+    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-keyout', keyFile, '-out', certFile,
+    '-days', '3650', '-subj', '/CN=miraifon-proxy',
+  ]);
+  return { cert: fs.readFileSync(certFile), key: fs.readFileSync(keyFile) };
+}
+
+function startBabyfonWssProxy(port) {
+  let certPair;
+  try {
+    certPair = ensureProxyCert();
+  } catch (e) {
+    console.error('[wss-proxy] Konnte Zertifikat nicht erzeugen/laden (ist openssl installiert?):', e.message);
+    return;
+  }
+
+  const httpsServer = https.createServer(certPair, (req, res) => {
+    res.writeHead(404);
+    res.end();
+  });
+  const wss = new WebSocket.Server({ server: httpsServer, path: '/babyfon' });
+
+  wss.on('connection', (appWs, req) => {
+    const url = new URL(req.url, `https://127.0.0.1:${port}`);
+    const panelHost = url.searchParams.get('panel');
+    const panelPort = parseInt(url.searchParams.get('port'), 10) || 5000;
+    const token = url.searchParams.get('token') || '';
+
+    if (!panelHost) {
+      console.warn('[wss-proxy] Verbindung ohne ?panel= abgelehnt');
+      appWs.close(1008, 'panel fehlt');
+      return;
+    }
+
+    const panelUrl = `ws://${panelHost}:${panelPort}/api/babyfon/stream?token=${encodeURIComponent(token)}`;
+    console.log(`[wss-proxy] App verbunden, leite weiter an ${panelHost}:${panelPort}`);
+    const panelWs = new WebSocket(panelUrl);
+
+    // Reine bidirektionale Weiterleitung, roh - der Proxy muss nicht
+    // verstehen, was durchfliesst (binaeres PCM-Audio, JSON-Alarm als Text),
+    // nur TLS auf der App-Seite terminieren. Kurze Warteschlange, falls die
+    // App (bisher ungenutzt, aber zur Vollstaendigkeit) etwas sendet, bevor
+    // die Panel-Verbindung selbst steht.
+    let panelReady = false;
+    const pending = [];
+    panelWs.on('open', () => {
+      panelReady = true;
+      for (const msg of pending) panelWs.send(msg);
+      pending.length = 0;
+    });
+    panelWs.on('message', (data, isBinary) => {
+      if (appWs.readyState === WebSocket.OPEN) appWs.send(data, { binary: isBinary });
+    });
+    panelWs.on('close', () => appWs.close());
+    panelWs.on('error', (e) => {
+      console.warn('[wss-proxy] Panel-Verbindung fehlgeschlagen:', e.message);
+      appWs.close(1011, 'Panel nicht erreichbar');
+    });
+
+    appWs.on('message', (data) => {
+      if (panelReady && panelWs.readyState === WebSocket.OPEN) panelWs.send(data);
+      else pending.push(data);
+    });
+    appWs.on('close', () => {
+      if (panelWs.readyState === WebSocket.OPEN || panelWs.readyState === WebSocket.CONNECTING) panelWs.close();
+    });
+    appWs.on('error', () => panelWs.close());
+  });
+
+  httpsServer.on('error', (e) => console.error('[wss-proxy] Server-Fehler:', e.message));
+  httpsServer.listen(port, '0.0.0.0', () => {
+    console.log(`[wss-proxy] Babyfon-WSS-Proxy auf Port ${port} (wss://<loxberry-ip>:${port}/babyfon?panel=<panel-ip>&token=<token>)`);
+  });
+}
+
+startBabyfonWssProxy(WSS_PROXY_PORT);
 
 main().catch(e => {
   console.error('[bridge] Fataler Fehler:', e);

@@ -33,7 +33,7 @@
     --shadow:0 2px 10px rgba(0,0,0,.1);
   }
 }
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;
+body{font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;
      min-height:100dvh;padding-bottom:env(safe-area-inset-bottom)}
 
 header{background:var(--s1);border-bottom:1px solid var(--brd);padding:0 18px;
@@ -73,11 +73,14 @@ main{max-width:520px;margin:0 auto;padding:16px}
 .hint{font-size:12px;color:var(--txt2);margin:-8px 0 16px;line-height:1.5}
 
 .btn{padding:12px 20px;border:none;border-radius:8px;font-size:14px;font-weight:600;
-     cursor:pointer;width:100%;margin-bottom:10px}
+     cursor:pointer;width:100%;margin-bottom:10px;transition:transform .08s ease}
+.btn:active{transform:scale(.97)}
 .btn-primary{background:var(--acc);color:#0e0e0e}
 .btn-ghost{background:var(--s2);color:var(--txt);border:1px solid var(--brd)}
 .btn-danger{background:transparent;color:var(--err)}
-.icon-btn{background:none;border:none;color:var(--txt2);font-size:20px;cursor:pointer;padding:6px}
+.icon-btn{background:none;border:none;color:var(--txt2);font-size:20px;cursor:pointer;padding:6px;
+          transition:transform .08s ease}
+.icon-btn:active{transform:scale(.9)}
 
 /* ── Player ──────────────────────────────────────────────── */
 .player-room{font-size:22px;font-weight:700;text-align:center;margin:18px 0 6px}
@@ -91,13 +94,62 @@ main{max-width:520px;margin:0 auto;padding:16px}
 
 .stream-toggle{width:140px;height:140px;border-radius:50%;border:none;margin:10px auto;
                 display:block;font-size:15px;font-weight:700;cursor:pointer;
-                background:var(--s2);color:var(--txt);border:2px solid var(--brd)}
-.stream-toggle.live{background:var(--err);color:#fff;border-color:var(--err)}
+                background:var(--s2);color:var(--txt);border:2px solid var(--brd);
+                transition:transform .08s ease,background .15s,border-color .15s}
+.stream-toggle:active{transform:scale(.96)}
+.stream-toggle.live{background:var(--err);color:#fff;border-color:var(--err);
+                     animation:live-glow 2s ease-in-out infinite}
+@keyframes live-glow{
+  0%,100%{box-shadow:0 0 0 0 rgba(244,67,54,.5)}
+  50%{box-shadow:0 0 0 14px rgba(244,67,54,0)}
+}
 
-.volume-block{margin-top:40px}
+/* Settings-Karte: fasst Lautstaerke/Mute/Empfindlichkeit optisch zu einem
+   Block zusammen, abgesetzt vom grossen Start/Stop-Knopf darueber. */
+.settings-card{background:var(--s1);border:1px solid var(--brd);border-radius:16px;
+               padding:20px;margin-top:28px;box-shadow:var(--shadow)}
+
+.volume-block{margin-top:0}
 .volume-block label{display:flex;justify-content:space-between;font-size:13px;
                      color:var(--txt2);margin-bottom:10px}
 input[type=range]{width:100%;accent-color:var(--acc);height:28px}
+
+/* ── Toggle-Switch (statt nativer Checkbox) ───────────────────────── */
+.switch-row{display:flex;align-items:center;justify-content:space-between;
+            gap:14px;margin-top:22px;padding-top:20px;border-top:1px solid var(--brd)}
+.switch-row label[for]{font-size:13px;color:var(--txt);line-height:1.5}
+.switch{position:relative;display:inline-block;width:48px;height:28px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.switch-track{position:absolute;inset:0;background:var(--s3);border-radius:14px;
+              cursor:pointer;transition:background .15s}
+.switch-track::before{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;
+                       border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);
+                       transition:transform .15s}
+.switch input:checked + .switch-track{background:var(--acc)}
+.switch input:checked + .switch-track::before{transform:translateX(20px)}
+
+/* ── Live-Pegelbalken + Empfindlichkeits-Regler, verschmolzen zu einem
+   Widget: Leuchtbalken = aktuelle Lautstaerke, der Regler liegt direkt
+   darueber, sein Griff (schlichter weisser Strich statt rundem Knopf)
+   IST die Markierung fuer die gewaehlte Schwelle - keine zwei getrennten
+   Elemente mehr, nur noch Uebereinander-Legen von Glow + Strich. ────── */
+.level-meter{position:relative;width:100%;height:40px;border-radius:20px;
+             background:var(--s2);overflow:hidden}
+.level-meter-bar{position:absolute;left:0;top:0;bottom:0;width:0%;
+                  border-radius:20px;
+                  background:linear-gradient(90deg,var(--acc),#9fe85a);
+                  box-shadow:0 0 18px 3px rgba(102,205,0,.5);
+                  transition:width .09s linear}
+.level-meter input[type=range]{position:absolute;inset:0;width:100%;height:100%;
+             margin:0;background:transparent;-webkit-appearance:none;appearance:none;
+             cursor:pointer;z-index:1}
+.level-meter input[type=range]::-webkit-slider-runnable-track{background:transparent;height:100%}
+.level-meter input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
+             width:4px;height:34px;border-radius:3px;background:#fff;
+             box-shadow:0 0 8px rgba(0,0,0,.6);cursor:pointer}
+.level-meter input[type=range]::-moz-range-track{background:transparent;height:100%;border:none}
+.level-meter input[type=range]::-moz-range-thumb{width:4px;height:34px;border:none;
+             border-radius:3px;background:#fff;box-shadow:0 0 8px rgba(0,0,0,.6);cursor:pointer}
 
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
        background:var(--s3);color:var(--txt);padding:10px 18px;border-radius:8px;
@@ -109,6 +161,14 @@ input[type=range]{width:100%;accent-color:var(--acc);height:28px}
               background:var(--err);color:#fff;font-size:14px;font-weight:700;
               text-align:center;cursor:pointer;animation:alert-pulse 1s infinite}
 .alert-banner.show{display:block}
+
+/* ── Info-Panel (Empfangsmenge + Diagnose-Log), per ⓘ-Button togglebar ── */
+.info-panel{display:none;margin-top:24px;padding-top:16px;border-top:1px solid var(--brd)}
+.info-panel.show{display:block}
+.info-row{font-size:12px;color:var(--txt2);text-align:center;margin-bottom:10px}
+.debug-log{background:var(--s2);border:1px solid var(--brd);border-radius:8px;
+           color:var(--txt2);font-size:11px;font-family:monospace;padding:10px;
+           max-height:40vh;overflow:auto;white-space:pre-wrap}
 @keyframes alert-pulse{0%,100%{opacity:1}50%{opacity:.6}}
 </style>
 </head>
@@ -117,6 +177,10 @@ input[type=range]{width:100%;accent-color:var(--acc);height:28px}
 <header>
   <button class="icon-btn" id="btn-back" style="visibility:hidden">‹</button>
   <h1 id="header-title">MiraiFon</h1>
+  <!-- Nur auf dem Player-Screen sichtbar (siehe showScreen()) - zeigt/
+       versteckt das Info-Panel mit Empfangsmenge + Diagnose-Log, die auf
+       der Hauptseite nur stoeren wuerden. -->
+  <button class="icon-btn" id="btn-info" style="visibility:hidden;margin-left:auto">ⓘ</button>
 </header>
 
 <main>
@@ -131,7 +195,7 @@ input[type=range]{width:100%;accent-color:var(--acc);height:28px}
 
   <!-- ══════════ Screen: Panel hinzufuegen/bearbeiten ══════════ -->
   <section class="screen" id="screen-edit">
-    <button class="btn btn-primary" id="btn-scan-qr" style="margin-bottom:18px">📷 QR-Code am Panel scannen</button>
+    <button class="btn btn-primary" id="btn-scan-qr" style="margin-bottom:18px">QR-Code am Panel scannen</button>
     <p class="hint" id="scan-only-hint" style="margin-top:-10px">
       Panel: Einstellungen → "MiraiFon koppeln" → mit der Kamera scannen.
       Oder darunter manuell eintragen.
@@ -192,9 +256,55 @@ input[type=range]{width:100%;accent-color:var(--acc);height:28px}
 
     <button class="stream-toggle" id="btn-toggle-stream">Start</button>
 
-    <div class="volume-block">
-      <label><span>Lautstärke</span><span id="p-vol-val">100%</span></label>
-      <input type="range" id="p-volume" min="0" max="200" value="100">
+    <!-- Alles, was nicht die Haupt-Aktion (Start/Stop) ist, gruppiert in
+         einer eigenen Karte - trennt optisch "das Eine, das man staendig
+         antippt" von "Einstellungen, die man selten anfasst". -->
+    <div class="settings-card">
+      <div class="volume-block">
+        <label><span>Lautstärke</span><span id="p-vol-val">100%</span></label>
+        <input type="range" id="p-volume" min="0" max="200" value="100">
+      </div>
+
+      <!-- Standard = durchgehend hoerbar (echtes Babyphone-Verhalten, auch
+           im Hintergrund) - diese Option ist bewusst ein Opt-in fuer alle,
+           die lieber nur bei Alarm etwas hoeren wollen (Akku/Dauerrauschen).
+           Mute passiert rein am Gain-Node (siehe visibilitychange unten),
+           die Erkennung selbst laeuft ohnehin am Panel, nicht am Handy. -->
+      <div class="switch-row">
+        <label for="p-mute-bg">Im Hintergrund stummschalten<br><span class="hint" style="margin:0">Nur bei Alarm hörbar</span></label>
+        <label class="switch">
+          <input type="checkbox" id="p-mute-bg">
+          <span class="switch-track"></span>
+        </label>
+      </div>
+
+      <!-- Empfindlichkeit der Lautstaerke-Warnung: bewusst 5 benannte Stufen
+           statt einer rohen RMS-Zahl (siehe cfg_babyfon_alert_threshold am
+           Panel) - niemand, der nicht am Firmware-Code sitzt, kann mit
+           "0.15" etwas anfangen. Der Pegelbalken darunter zeigt live mit,
+           wie laut es gerade ist (aus den sowieso ankommenden PCM-Daten
+           lokal berechnet, kein neuer Panel-Endpunkt noetig) - der
+           Regler-Griff auf dem Balken markiert die gewaehlte Stufe, als
+           Kalibrierungs-Hilfe ("mach mal Krach, schau wo der Balken
+           steht"). Nur sinnvoll benutzbar, waehrend der Stream laeuft. -->
+      <div class="field" style="margin-top:22px;margin-bottom:0">
+        <label style="display:flex;justify-content:space-between;font-size:13px;color:var(--txt2);margin-bottom:8px">
+          <span>Empfindlichkeit Lautstärke-Warnung</span><span id="p-sens-val">Normal</span>
+        </label>
+        <div class="level-meter" id="level-meter">
+          <div class="level-meter-bar" id="level-meter-bar"></div>
+          <input type="range" id="p-sensitivity" min="0" max="4" step="1" value="2">
+        </div>
+        <div class="hint">Balken = aktuelle Lautstärke, Strich = gewählte Warnschwelle. Nur während des Streams aktuell.</div>
+      </div>
+    </div>
+
+    <!-- Per Info-Button (ⓘ oben) ein-/ausblendbar - Empfangsmenge +
+         Diagnose-Log gehoeren nicht auf die Hauptseite, sind aber fuers
+         Debuggen (z.B. "kommen ueberhaupt Daten an?") weiter nuetzlich. -->
+    <div class="info-panel" id="info-panel">
+      <div class="info-row" id="p-bytes">0 KB empfangen</div>
+      <div class="debug-log" id="debug-log"></div>
     </div>
   </section>
 
@@ -224,6 +334,9 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
   const back = document.getElementById('btn-back');
   const title = document.getElementById('header-title');
+  const info = document.getElementById('btn-info');
+  info.style.visibility = (id === 'screen-player') ? 'visible' : 'hidden';
+  if (id !== 'screen-player') document.getElementById('info-panel').classList.remove('show');
   if (id === 'screen-list') {
     back.style.visibility = 'hidden';
     title.textContent = 'MiraiFon';
@@ -238,6 +351,10 @@ function showScreen(id) {
     title.textContent = 'QR-Code scannen';
   }
 }
+
+document.getElementById('btn-info').addEventListener('click', () => {
+  document.getElementById('info-panel').classList.toggle('show');
+});
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -255,7 +372,7 @@ function renderList() {
     const card = document.createElement('div');
     card.className = 'panel-card';
     card.innerHTML = `
-      <div class="dot"></div>
+      <div class="dot" title="Status wird geprüft…"></div>
       <div style="flex:1">
         <div class="room">${escapeHtml(p.room)}</div>
         <div class="host">${escapeHtml(p.host)}:${p.port}</div>
@@ -268,7 +385,22 @@ function renderList() {
     });
     card.querySelector('.edit-btn').addEventListener('click', () => openEdit(p.id));
     list.appendChild(card);
+    pingPanel(p, card.querySelector('.dot'));
   });
+}
+
+// Online-Status-Punkt: kurzer, leichtgewichtiger Erreichbarkeits-Check beim
+// Anzeigen der Liste - nutzt denselben Config-Endpunkt wie die Empfindlich-
+// keits-Einstellung (kein eigener Health-Check-Endpunkt noetig), zaehlt
+// aber JEDE Antwort (auch 401 bei falschem Token) schon als "erreichbar" -
+// hier geht es nur um "ist das Geraet gerade online", nicht um Auth.
+function pingPanel(p, dotEl) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000);
+  fetch(babyfonConfigUrl(p), { headers: { 'X-Auth-Token': p.token }, signal: ctrl.signal })
+    .then(() => { dotEl.classList.add('ok'); dotEl.title = 'Online'; })
+    .catch(() => { dotEl.classList.remove('ok'); dotEl.title = 'Nicht erreichbar'; })
+    .finally(() => clearTimeout(timer));
 }
 function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -434,6 +566,7 @@ function openPlayer(id) {
   document.getElementById('btn-toggle-stream').textContent = 'Start';
   document.getElementById('btn-toggle-stream').classList.remove('live');
   showScreen('screen-player');
+  loadSensitivity(p);
 }
 
 document.getElementById('btn-toggle-stream').addEventListener('click', () => {
@@ -444,6 +577,137 @@ document.getElementById('p-volume').addEventListener('input', (e) => {
   document.getElementById('p-vol-val').textContent = e.target.value + '%';
   if (gainNode) gainNode.gain.value = e.target.value / 100;
 });
+
+// ── "Im Hintergrund stummschalten" ──────────────────────────────────────
+// Default-Verhalten bleibt durchgehend hoerbar (echtes Babyphone, auch mit
+// Handy in der Tasche) - diese Option ist Opt-in fuer alle, die lieber nur
+// bei einem Alarm etwas hoeren wollen. Mute passiert rein am Gain-Node
+// (Stream/Erkennung laufen unveraendert weiter, die Erkennung sowieso am
+// Panel) - bei einem Alarm waehrend stummgeschaltet wird kurz wieder
+// hoerbar, danach (falls immer noch im Hintergrund) erneut stumm.
+const btnMuteBg = document.getElementById('p-mute-bg');
+btnMuteBg.checked = localStorage.getItem('miraifon_mute_bg') === '1';
+btnMuteBg.addEventListener('change', () => {
+  localStorage.setItem('miraifon_mute_bg', btnMuteBg.checked ? '1' : '0');
+  if (!btnMuteBg.checked && isBgMuted) unmuteForBackground();
+});
+let isBgMuted = false;
+let alertUnmuteTimer = null;
+function muteForBackground() {
+  if (!gainNode || isBgMuted) return;
+  isBgMuted = true;
+  gainNode.gain.value = 0;
+}
+function unmuteForBackground() {
+  if (!gainNode) return;
+  isBgMuted = false;
+  gainNode.gain.value = document.getElementById('p-volume').value / 100;
+}
+document.addEventListener('visibilitychange', () => {
+  if (!gainNode || !btnMuteBg.checked) return;
+  clearTimeout(alertUnmuteTimer);
+  if (document.visibilityState === 'hidden') muteForBackground();
+  else unmuteForBackground();
+});
+
+// ── Empfindlichkeit Lautstaerke-Warnung ─────────────────────────────────
+// 5 benannte Stufen statt einer rohen RMS-Zahl (siehe
+// cfg_babyfon_alert_threshold am Panel) - die Zahl selbst ist fuer niemanden
+// ausserhalb der Firmware greifbar. Panel-Endpunkt /api/babyfon/config
+// (GET/POST) nutzt bewusst den Babyfon-Pairing-Token als Auth, nicht das
+// Admin-Passwort der Panel-Weboberflaeche - die App soll letzteres nie
+// kennen muessen.
+const SENSITIVITY_LEVELS = [
+  { label: 'Sehr empfindlich',   value: 0.05 },
+  { label: 'Empfindlich',        value: 0.08 },
+  { label: 'Normal',             value: 0.10 },
+  { label: 'Unempfindlich',      value: 0.15 },
+  { label: 'Sehr unempfindlich', value: 0.25 },
+];
+const LEVEL_METER_MAX = 0.35; // Skalen-Obergrenze fuer die visuelle Anzeige, siehe currentLevel unten
+
+function babyfonConfigUrl(p) {
+  // Gleiches Direkt-vs-Proxy-Muster wie beim Audio-Stream (startStream):
+  // mit Bridge-IP ueber den HTTPS-Proxy (bin/bridge.js, "/babyfon-config"
+  // - noetig, wenn diese Seite selbst ueber HTTPS laeuft, sonst Mixed-
+  // Content-Block), ohne Bridge-IP direkt per Klartext-HTTP ans Panel.
+  return p.bridge
+    ? `https://${p.bridge}:8443/babyfon-config?panel=${encodeURIComponent(p.host)}&port=${p.port}`
+    : `http://${p.host}:${p.port}/api/babyfon/config`;
+}
+
+function nearestSensitivityIndex(threshold) {
+  let best = 2, bestDiff = Infinity;
+  SENSITIVITY_LEVELS.forEach((lvl, i) => {
+    const diff = Math.abs(lvl.value - threshold);
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  });
+  return best;
+}
+
+const sensInput = document.getElementById('p-sensitivity');
+const sensLabel = document.getElementById('p-sens-val');
+
+function loadSensitivity(p) {
+  fetch(babyfonConfigUrl(p), { headers: { 'X-Auth-Token': p.token } })
+    .then((r) => r.json())
+    .then((data) => {
+      const idx = nearestSensitivityIndex(data.alert_threshold || 0.1);
+      sensInput.value = idx;
+      sensLabel.textContent = SENSITIVITY_LEVELS[idx].label;
+    })
+    .catch((e) => debugLog('Empfindlichkeit laden fehlgeschlagen: ' + e));
+}
+
+sensInput.addEventListener('input', () => {
+  sensLabel.textContent = SENSITIVITY_LEVELS[sensInput.value].label;
+});
+sensInput.addEventListener('change', () => {
+  const p = panels.find(x => x.id === activePanel);
+  if (!p) return;
+  const threshold = SENSITIVITY_LEVELS[sensInput.value].value;
+  fetch(babyfonConfigUrl(p), {
+    method: 'POST',
+    headers: { 'X-Auth-Token': p.token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alert_threshold: threshold }),
+  })
+    .then((r) => r.json())
+    .then(() => toast('Empfindlichkeit gespeichert'))
+    .catch((e) => { debugLog('Empfindlichkeit speichern fehlgeschlagen: ' + e); toast('Fehler beim Speichern'); });
+});
+
+// Live-Pegelbalken: aus den sowieso ankommenden PCM-Audiodaten lokal
+// berechnet (siehe playPcmChunk), kein eigener Panel-Endpunkt noetig. Leicht
+// gegltaettet (Exponential-Mittel), damit der Balken nicht bei jedem Chunk
+// hektisch zuckt, aber trotzdem spuerbar in Echtzeit reagiert.
+let currentLevel = 0;
+function updateLevelMeter(rms) {
+  currentLevel = currentLevel * 0.7 + rms * 0.3;
+  const pct = Math.min(100, (currentLevel / LEVEL_METER_MAX) * 100);
+  document.getElementById('level-meter-bar').style.width = pct + '%';
+}
+
+// ── Android-Hintergrundbetrieb (Phase 2) ───────────────────────────────
+// window.Capacitor existiert nur innerhalb der nativen App (vom Capacitor-
+// Laufzeit-Code automatisch in die WebView injiziert) - in einem normalen
+// Browser/PWA-Tab ist es undefined, alle Aufrufe hier sind deshalb
+// durchgehend abgesichert. Siehe android/.../BabyfonForegroundService.kt:
+// haelt den Prozess am Leben, waehrend ein Stream aktiv ist, damit die
+// WebSocket-Verbindung + Audio-Wiedergabe + Alarm-Erkennung (alles hier im
+// JS, unveraendert) auch mit ausgeschaltetem Bildschirm weiterlaeuft.
+function isNativeAndroid() {
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+function startBabyfonForeground(room) {
+  if (!isNativeAndroid()) return;
+  const { BabyfonForeground, LocalNotifications } = window.Capacitor.Plugins;
+  BabyfonForeground.start({ room }).catch((e) => debugLog('Foreground-Service-Start fehlgeschlagen: ' + e));
+  LocalNotifications.requestPermissions().catch(() => {});
+}
+function stopBabyfonForeground() {
+  if (!isNativeAndroid()) return;
+  window.Capacitor.Plugins.BabyfonForeground.stop().catch(() => {});
+}
 
 function startStream() {
   const p = panels.find(x => x.id === activePanel);
@@ -492,12 +756,14 @@ function startStream() {
   ws.onopen = () => {
     clearTimeout(connectTimeout);
     bytesReceivedTotal = 0;
+    document.getElementById('p-bytes').textContent = '0 KB empfangen';
     setStatus('Verbunden', 'ok');
     document.getElementById('btn-toggle-stream').textContent = 'Stop';
     document.getElementById('btn-toggle-stream').classList.add('live');
+    startBabyfonForeground(p.room);
   };
-  ws.onclose = () => { clearTimeout(connectTimeout); setStatus('Verbindung getrennt', 'err'); resetToggle(); };
-  ws.onerror = () => { clearTimeout(connectTimeout); setStatus('Verbindung fehlgeschlagen', 'err'); resetToggle(); };
+  ws.onclose = () => { clearTimeout(connectTimeout); setStatus('Verbindung getrennt', 'err'); resetToggle(); stopBabyfonForeground(); };
+  ws.onerror = () => { clearTimeout(connectTimeout); setStatus('Verbindung fehlgeschlagen', 'err'); resetToggle(); stopBabyfonForeground(); };
   ws.onmessage = (ev) => {
     if (typeof ev.data === 'string') { handleTextMessage(ev.data); return; }
     playPcmChunk(ev.data);
@@ -517,10 +783,19 @@ function startStream() {
 // WebSocket-Verbindung wie die Audiodaten - kein separater Push-Dienst noetig,
 // funktioniert aber nur solange die App aktiv verbunden ist (kein
 // Hintergrund-/Sperrbildschirm-Fall, das waere Phase 2 mit echtem Web Push).
+// Diagnose-Log - schreibt ins Info-Panel (ⓘ-Button, per Default versteckt,
+// siehe .info-panel in showScreen()) statt als permanent sichtbares Overlay.
+function debugLog(text) {
+  const el = document.getElementById('debug-log');
+  if (!el) return;
+  el.textContent = new Date().toLocaleTimeString() + ' ' + text + '\n' + el.textContent;
+}
+
 function handleTextMessage(raw) {
+  debugLog('handleTextMessage: ' + raw);
   let msg;
-  try { msg = JSON.parse(raw); } catch (e) { return; }
-  if (msg.type !== 'alert') return;
+  try { msg = JSON.parse(raw); } catch (e) { debugLog('JSON-Parse-Fehler: ' + e.message); return; }
+  if (msg.type !== 'alert') { debugLog('type != alert, ignoriert: ' + msg.type); return; }
 
   const banner = document.getElementById('alert-banner');
   banner.classList.add('show');
@@ -529,13 +804,83 @@ function handleTextMessage(raw) {
 
   if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
 
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      new Notification('MiraiFon Babyphone', {
+  // "Nur bei Alarm hoerbar": kurz aufdecken, auch wenn gerade stummgeschaltet
+  // (z.B. App im Hintergrund) - danach automatisch wieder stumm, FALLS die
+  // App zu diesem Zeitpunkt noch im Hintergrund ist (nicht blind erneut
+  // stummschalten, wenn der Nutzer inzwischen zurueckgekehrt ist).
+  if (isBgMuted) {
+    unmuteForBackground();
+    clearTimeout(alertUnmuteTimer);
+    alertUnmuteTimer = setTimeout(() => {
+      // Nur erneut stummschalten, wenn die Option noch an ist UND die App
+      // immer noch im Hintergrund ist (sonst wuerde ein zurueckgekehrter
+      // Nutzer ploetzlich ohne eigenes Zutun stummgeschaltet).
+      if (btnMuteBg.checked && document.visibilityState === 'hidden') muteForBackground();
+    }, 15000);
+  }
+
+  // Native Android-Benachrichtigung (Phase 2) - kommt zuverlaessig auch mit
+  // ausgeschaltetem Bildschirm an, solange der Foreground-Service laeuft
+  // (siehe startBabyfonForeground). Unabhaengig vom Browser-Notification-
+  // Weg weiter unten, der nur fuer die PWA/iPhone-Variante gilt.
+  if (isNativeAndroid()) {
+    window.Capacitor.Plugins.LocalNotifications.schedule({
+      notifications: [{
+        id: Date.now() % 2147483647,
+        title: 'MiraiFon Babyphone',
         body: 'Laute Geräusche erkannt',
-        tag: 'babyfon-alert',  // ersetzt eine evtl. noch offene vorherige Benachrichtigung statt zu stapeln
+        channelId: 'babyfon_alert',
+      }],
+    }).catch((e) => debugLog('LocalNotifications fehlgeschlagen: ' + e));
+  }
+
+  debugLog('serviceWorker=' + ('serviceWorker' in navigator) +
+           ' Notification=' + ('Notification' in window) +
+           ' permission=' + (('Notification' in window) ? Notification.permission : 'n/a'));
+
+  // Service-Worker-Weg zuerst versuchen, NUR wenn ein SW diese Seite gerade
+  // aktiv kontrolliert (navigator.serviceWorker.controller) - sonst direkt
+  // auf new Notification() ausweichen. Grund (gefunden 2026-10-01): SW-
+  // Registrierung schlaegt bei einem selbstsignierten Zertifikat fehl
+  // ("SSL certificate error"), AUCH NACHDEM der Nutzer die Zertifikats-
+  // warnung fuer die normale Seite akzeptiert hat - Chrome laesst diese
+  // Ausnahme fuer Service-Worker-Skript-Fetches bewusst NICHT gelten
+  // (staerkere Sicherheitspruefung als fuer normale Seiten). Ohne echtes,
+  // vertrauenswuerdiges Zertifikat bleibt der SW-Weg hier dauerhaft
+  // unerreichbar - new Notification() braucht diese strikte Pruefung nicht.
+  if ('Notification' in window && Notification.permission === 'granted') {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then((reg) => {
+        debugLog('SW ready, scope=' + reg.scope + ' active=' + (!!reg.active));
+        return reg.showNotification('MiraiFon Babyphone', {
+          body: 'Laute Geräusche erkannt',
+          tag: 'babyfon-alert',
+          vibrate: [200, 100, 200, 100, 200],
+        });
+      }).then(() => {
+        debugLog('showNotification (SW) OK');
+      }).catch((e) => {
+        debugLog('showNotification (SW) FEHLER: ' + (e && e.message ? e.message : e) + ' - versuche direkten Weg');
+        tryDirectNotification();
       });
-    } catch (e) { /* manche Browser werfen hier ausserhalb eines Service-Workers */ }
+    } else {
+      debugLog('Kein aktiver Service Worker (controller=' + !!(navigator.serviceWorker && navigator.serviceWorker.controller) + ') - direkter Weg');
+      tryDirectNotification();
+    }
+  } else {
+    debugLog('Notification nicht verfuegbar/erlaubt, permission=' + (('Notification' in window) ? Notification.permission : 'n/a'));
+  }
+}
+
+function tryDirectNotification() {
+  try {
+    new Notification('MiraiFon Babyphone', {
+      body: 'Laute Geräusche erkannt',
+      tag: 'babyfon-alert',
+    });
+    debugLog('new Notification() OK (direkter Weg)');
+  } catch (e) {
+    debugLog('new Notification() FEHLER: ' + (e && e.message ? e.message : e));
   }
 }
 
@@ -544,6 +889,7 @@ function stopStream() {
   if (audioCtx) { audioCtx.close(); audioCtx = null; gainNode = null; }
   resetToggle();
   setStatus('Nicht verbunden', '');
+  stopBabyfonForeground();
 }
 function resetToggle() {
   document.getElementById('btn-toggle-stream').textContent = 'Start';
@@ -570,17 +916,24 @@ function playPcmChunk(buf) {
   // Sichtbarer Beweis, dass ueberhaupt Daten ankommen - unabhaengig davon, ob
   // man sie hoert. Hilft genau die Frage zu beantworten, die beim Debuggen
   // 2026-09-30/10-01 offen blieb: kommt am Panel/in der App ueberhaupt etwas
-  // an, oder haengt es schon vorher?
+  // an, oder haengt es schon vorher? Steht im Info-Panel (ⓘ-Button), nicht
+  // mehr auf der Hauptseite - stoert dort nur im Alltagsbetrieb.
   bytesReceivedTotal += buf.byteLength;
-  setStatus(`Verbunden — ${(bytesReceivedTotal / 1024).toFixed(0)} KB empfangen`, 'ok');
+  document.getElementById('p-bytes').textContent = `${(bytesReceivedTotal / 1024).toFixed(0)} KB empfangen`;
 
   const audioBuf = audioCtx.createBuffer(2, frameCount, SAMPLE_RATE);
   const left = audioBuf.getChannelData(0);
   const right = audioBuf.getChannelData(1);
+  let sumSq = 0;
   for (let i = 0; i < frameCount; i++) {
     left[i]  = view.getInt16(i * 4,     true) / 32768;
     right[i] = view.getInt16(i * 4 + 2, true) / 32768;
+    sumSq += left[i] * left[i];
   }
+  // Fuer den Live-Pegelbalken (Empfindlichkeits-Kalibrierung) - gleiche
+  // RMS-Berechnung wie am Panel (babyfon_stream.h check_alert_()), nur
+  // hier lokal aus dem schon decodierten linken Kanal statt am Panel.
+  updateLevelMeter(Math.sqrt(sumSq / frameCount));
 
   const src = audioCtx.createBufferSource();
   src.buffer = audioBuf;
@@ -594,8 +947,30 @@ function playPcmChunk(buf) {
 
 // ── Init ───────────────────────────────────────────────────
 renderList();
+debugLog('Script geladen (debug-v3), Origin=' + location.origin);
+
+// Eigener, lauter Kanal nur fuer die Lautstaerke-Warnung (IMPORTANCE_HIGH =
+// Ton+Vibration+Heads-up) - bewusst getrennt vom leisen "Babyfon aktiv"-
+// Dauerkanal des Foreground-Service (babyfon_service, IMPORTANCE_LOW, siehe
+// BabyfonForegroundService.kt). Einmalig beim Start anlegen, nicht erst bei
+// der ersten Warnung - Android zeigt den Channel sonst ggf. zu spaet an.
+if (isNativeAndroid()) {
+  window.Capacitor.Plugins.LocalNotifications.createChannel({
+    id: 'babyfon_alert',
+    name: 'Lautstärke-Warnung',
+    description: 'Benachrichtigung bei lauten Geräuschen im abgehörten Raum',
+    importance: 5, // IMPORTANCE_HIGH
+    vibration: true,
+  }).catch((e) => debugLog('createChannel fehlgeschlagen: ' + e));
+}
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    debugLog('SW registriert, scope=' + reg.scope);
+  }).catch((e) => {
+    debugLog('SW Registrierung FEHLER: ' + (e && e.message ? e.message : e));
+  });
+} else {
+  debugLog('serviceWorker API nicht vorhanden!');
 }
 </script>
 </body>

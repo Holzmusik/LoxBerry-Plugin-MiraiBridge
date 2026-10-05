@@ -2,6 +2,11 @@
 # Packen ein alter Zip im neuen, siehe KNXtoLOX-Erfahrung).
 *.zip
 
+# MiraiFon-Android-APKs (webfrontend/html/miraifon/) - nur zum Ad-hoc-
+# Download ins Heimnetz abgelegt (Build liegt im separaten MiraiFon-Repo),
+# gehoeren nicht in dieses Plugin-Repo.
+*.apk
+
 # Node: node_modules wird bei jeder Installation frisch von postinstall.sh
 # via "npm install" erzeugt (siehe README), nie eingecheckt.
 node_modules/

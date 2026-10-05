@@ -912,6 +912,78 @@ function ensureProxyCert() {
   return { cert: fs.readFileSync(certFile), key: fs.readFileSync(keyFile) };
 }
 
+// Nur private LAN-Adressen (RFC1918) oder .local-Hostnamen als Panel-Ziel
+// erlaubt - verhindert, dass der Config-Proxy unten als offenes Relay ins
+// oeffentliche Internet missbraucht werden kann (SSRF). Der ganze Zweck
+// dieses Endpunkts ist ausschliesslich die Kommunikation mit dem eigenen
+// Panel im selben Heimnetz, nie mit irgendeinem fremden Host.
+const PRIVATE_LAN_HOST_RE = /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
+function isAllowedPanelHost(host) {
+  return PRIVATE_LAN_HOST_RE.test(host) || host.endsWith('.local');
+}
+
+// HTTPS→HTTP-Durchreiche fuer GENAU EINEN Zweck: die MiraiFon-App soll die
+// Empfindlichkeit der Lautstaerke-Warnung auch ueber HTTPS (Browser/iPhone,
+// wo ein direkter Klartext-fetch() am selben Mixed-Content-Problem
+// scheitern wuerde wie vorher die WebSocket-Verbindung) einstellen koennen,
+// ohne dass das Panel selbst HTTPS braeuchte. BEWUSST kein generischer
+// Proxy (das waere eine Sicherheitsluecke): Zielpfad am Panel ist fest
+// verdrahtet (/api/babyfon/config), niemals vom Client bestimmbar, nur
+// Methode (GET/POST) und panel/port (wie beim bestehenden WS-Audio-Proxy)
+// kommen von aussen - zusaetzlich gegen SSRF abgesichert durch
+// isAllowedPanelHost() oben und ein winziges Body-Limit (das Settings-JSON
+// hat genau ein Feld).
+function handleBabyfonConfigProxy(req, res) {
+  const url = new URL(req.url, 'https://127.0.0.1');
+  if (url.pathname !== '/babyfon-config' || (req.method !== 'GET' && req.method !== 'POST')) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+  const panelHost = url.searchParams.get('panel');
+  const panelPort = parseInt(url.searchParams.get('port'), 10) || 5000;
+  if (!panelHost || !isAllowedPanelHost(panelHost)) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end('{"error":"invalid panel host"}');
+    return;
+  }
+  const authToken = req.headers['x-auth-token'] || '';
+
+  const chunks = [];
+  let size = 0;
+  req.on('data', (chunk) => {
+    size += chunk.length;
+    if (size > 512) { req.destroy(); return; } // das Settings-JSON hat genau ein Feld
+    chunks.push(chunk);
+  });
+  req.on('end', () => {
+    const bodyBuf = Buffer.concat(chunks);
+    const proxyReq = http.request({
+      host: panelHost,
+      port: panelPort,
+      path: '/api/babyfon/config',
+      method: req.method,
+      timeout: 5000,
+      headers: {
+        'X-Auth-Token': authToken,
+        'Content-Type': 'application/json',
+        'Content-Length': bodyBuf.length,
+      },
+    }, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json' });
+      proxyRes.pipe(res);
+    });
+    proxyReq.on('error', (e) => {
+      console.warn('[wss-proxy] Config-Proxy: Panel nicht erreichbar:', e.message);
+      if (!res.headersSent) { res.writeHead(502, { 'Content-Type': 'application/json' }); }
+      res.end('{"error":"panel unreachable"}');
+    });
+    proxyReq.on('timeout', () => proxyReq.destroy());
+    if (req.method === 'POST') proxyReq.write(bodyBuf);
+    proxyReq.end();
+  });
+}
+
 function startBabyfonWssProxy(port) {
   let certPair;
   try {
@@ -922,8 +994,7 @@ function startBabyfonWssProxy(port) {
   }
 
   const httpsServer = https.createServer(certPair, (req, res) => {
-    res.writeHead(404);
-    res.end();
+    handleBabyfonConfigProxy(req, res);
   });
   const wss = new WebSocket.Server({ server: httpsServer, path: '/babyfon' });
 

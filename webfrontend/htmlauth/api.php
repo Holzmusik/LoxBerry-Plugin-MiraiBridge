@@ -238,15 +238,23 @@ function build_topics($panel, $global, $loxStructure) {
                     }
                     // Aktuelle Lichtfarbe: nicht jedes LightControllerV2 hat
                     // eine ColorPickerV2-Subcontrol (reine Dimmer-Lichter
-                    // haben keine) — bevorzugt "<uuid>/masterColor" (fasst
-                    // alle Farbkreise zusammen), sonst die erste gefundene
-                    // ColorPickerV2-Subcontrol (einzelner Spot/Farbkreis).
+                    // haben keine). "masterColor" liefert auf Hardware KEINE
+                    // Live-Updates (2026-10-16 verifiziert: bleibt dauerhaft
+                    // auf dem Startwert stehen, auch nach Farbaenderung am
+                    // einzelnen Kreis) — ist offenbar eine reine Schreib-
+                    // Steuerung ("wende diese Farbe auf alle Kreise an"),
+                    // kein Live-Spiegel. Deshalb bevorzugt der erste EINZELNE
+                    // Farbkreis (meldet live, siehe mqtt_router.yaml), "
+                    // masterColor" nur als Notloesung falls kein einzelner
+                    // Kreis existiert.
                     $colorUuid = null;
+                    $masterColorUuid = null;
                     foreach (($ctrl['subControls'] ?? []) as $subKey => $sub) {
                         if (($sub['type'] ?? '') !== 'ColorPickerV2') continue;
-                        if (substr($subKey, -12) === '/masterColor') { $colorUuid = $sub['states']['color'] ?? null; break; }
-                        if ($colorUuid === null) $colorUuid = $sub['states']['color'] ?? null;
+                        if (substr($subKey, -12) === '/masterColor') { $masterColorUuid = $sub['states']['color'] ?? null; continue; }
+                        if ($colorUuid === null) { $colorUuid = $sub['states']['color'] ?? null; break; }
                     }
+                    if ($colorUuid === null) $colorUuid = $masterColorUuid;
                     if ($colorUuid !== null) $topics["t_light_color{$sfx}"] = $colorUuid;
                     // Immer auch die _N-Suffixvariante schreiben, damit topic_fields()
                     // beide Schreibweisen kennt (Alias + indiziert).

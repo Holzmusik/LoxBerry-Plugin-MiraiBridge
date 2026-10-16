@@ -2,6 +2,16 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-10-16 (2)
+
+### Fix
+- **Lichtfarbe-Auswahl korrigiert**: `api.php` bevorzugte bisher die
+  "masterColor"-Subcontrol eines `LightControllerV2` — auf Hardware
+  verifiziert liefert die aber KEINE Live-Updates (reine "wende Farbe auf
+  alle Kreise an"-Steuerung, kein Spiegel der tatsächlichen Kreis-Farbe).
+  Bevorzugt jetzt den ersten einzelnen Farbkreis (meldet live), "masterColor"
+  nur noch als Notlösung falls kein einzelner Kreis existiert.
+
 ## [Unreleased] - 2026-10-16
 
 ### Neu

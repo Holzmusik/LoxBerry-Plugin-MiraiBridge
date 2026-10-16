@@ -1,0 +1,4 @@
+/*!
+ * (C) Ionic http://ionicframework.com - MIT License
+ */
+import{w as o,n as i}from"./p-B4xjg_Qu.js";import{K as e,a as r}from"./p-DxvRP6ld.js";const s=o=>void 0===i||o===r.None||void 0===o?null:i.querySelector("ion-app")??i.body,n=o=>{const i=s(o);return null===i?0:i.clientHeight},a=async i=>{let r,a,t,l;const d=async()=>{const i=await e.getResizeMode(),s=void 0===i?void 0:i.mode;r=()=>{void 0===l&&(l=n(s)),t=!0,c(t,s)},a=()=>{t=!1,c(t,s)},o?.addEventListener("keyboardWillShow",r),o?.addEventListener("keyboardWillHide",a)},c=(o,e)=>{i&&i(o,v(e))},v=o=>{if(0===l||l===n(o))return;const i=s(o);return null!==i?new Promise((o=>{const e=new ResizeObserver((()=>{i.clientHeight===l&&(e.disconnect(),o())}));e.observe(i)})):void 0};return await d(),{init:d,destroy:()=>{o?.removeEventListener("keyboardWillShow",r),o?.removeEventListener("keyboardWillHide",a),r=a=void 0},isKeyboardVisible:()=>t}};export{a as c}

@@ -236,6 +236,18 @@ function build_topics($panel, $global, $loxStructure) {
                             break;
                         }
                     }
+                    // Aktuelle Lichtfarbe: nicht jedes LightControllerV2 hat
+                    // eine ColorPickerV2-Subcontrol (reine Dimmer-Lichter
+                    // haben keine) — bevorzugt "<uuid>/masterColor" (fasst
+                    // alle Farbkreise zusammen), sonst die erste gefundene
+                    // ColorPickerV2-Subcontrol (einzelner Spot/Farbkreis).
+                    $colorUuid = null;
+                    foreach (($ctrl['subControls'] ?? []) as $subKey => $sub) {
+                        if (($sub['type'] ?? '') !== 'ColorPickerV2') continue;
+                        if (substr($subKey, -12) === '/masterColor') { $colorUuid = $sub['states']['color'] ?? null; break; }
+                        if ($colorUuid === null) $colorUuid = $sub['states']['color'] ?? null;
+                    }
+                    if ($colorUuid !== null) $topics["t_light_color{$sfx}"] = $colorUuid;
                     // Immer auch die _N-Suffixvariante schreiben, damit topic_fields()
                     // beide Schreibweisen kennt (Alias + indiziert).
                     if ($lightNum === 1) {
@@ -249,6 +261,7 @@ function build_topics($panel, $global, $loxStructure) {
                                 break;
                             }
                         }
+                        if ($colorUuid !== null) $topics['t_light_color_1'] = $colorUuid;
                     }
                 }
                 break;

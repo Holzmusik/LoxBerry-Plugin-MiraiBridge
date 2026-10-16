@@ -2,6 +2,16 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-10-16
+
+### Neu
+- **Lichtfarbe im Panel sichtbar**: `api.php` sucht in `LightControllerV2`-
+  Subcontrols jetzt nach einer `ColorPickerV2` (bevorzugt "masterColor",
+  sonst der erste gefundene Farbkreis/Spot) und mappt deren `color`-State auf
+  das neue Topic `t_light_color`. Vorher wurden nur Szenen und Master-
+  Helligkeit übertragen. Benötigt MiraiPanel-LCD-Firmware ≥ 1.1.9 (parst den
+  Loxone-Farbwert und zeigt einen Farb-Punkt im Licht-Widget).
+
 ## [Unreleased] - 2026-09-29 (3)
 
 ### Sonstiges

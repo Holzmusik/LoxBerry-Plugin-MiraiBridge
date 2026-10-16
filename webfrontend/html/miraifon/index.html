@@ -11,14 +11,35 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<!-- Ionic lokal eingebunden (kein CDN) - lazy-ladende Web-Components, kein
+     Bundler/Framework noetig. Grund fuer den Umstieg (2026-10-05): die
+     vorherige handgestrickte CSS-Loesung (eigener Regler, eigener Toggle)
+     hatte wiederholt Render-Probleme auf dem echten Geraet (Ueberlappung,
+     asymmetrischer Thumb) und wirkte insgesamt "altbacken" (flache satte
+     Farbflaechen, keine Tiefe, keine Icons). Ionics fertige, durchgetestete
+     Komponenten loesen beides auf einen Schlag, ohne jede Einzelheit selbst
+     nachzubauen. -->
+<link rel="stylesheet" href="ionic.bundle.css">
+<!-- Globaler iOS-Modus statt Auto-Erkennung (Bug 2026-10-05, per Screenshot
+     gefunden): Android bekaeme sonst automatisch Material-Design-Segmente
+     (Text-Tabs mit Unterstrich, nicht die gefuellten Pillen-Buttons, die
+     hier gewollt sind - und die bei 5 Eintraegen zudem abgeschnitten
+     wurden). Ein fest eingestellter Modus liefert ausserdem auf
+     Android UND iPhone/Browser exakt dasselbe, konsistente Mirai-
+     Erscheinungsbild statt pro Plattform unterschiedlicher System-Stile. -->
+<script>window.Ionic = { config: { mode: 'ios' } };</script>
+<script type="module" src="ionic/ionic.esm.js"></script>
+
 <style>
 /* Farbschema 1:1 aus MiraiPanel-LCD/web_ui/index.html uebernommen, damit
    sich MiraiFon optisch als Teil desselben Mirai-Oekosystems anfuehlt.
-   Anders als dort (manueller data-theme-Umschalter) folgt MiraiFon hier von
-   Anfang an automatisch dem OS-Hell/Dunkel-Modus (prefers-color-scheme) -
+   Folgt automatisch dem OS-Hell/Dunkel-Modus (prefers-color-scheme) -
    Handy-Apps werden von Nutzern eher darueber erwartet als ein eigener
-   In-App-Umschalter. */
-*{box-sizing:border-box;margin:0;padding:0}
+   In-App-Umschalter. Diese Variablen sind weiterhin die Quelle der
+   Wahrheit, die ion-*-Variablen unten referenzieren nur sie - so bleibt
+   die Theme-Logik an einer Stelle. */
+*{box-sizing:border-box}
 :root{
   --bg:#0e0e0e;--s1:#1a1a1a;--s2:#242424;--s3:#2e2e2e;
   --acc:#66CD00;--txt:#d8d8d8;--txt2:#888;--brd:#333;
@@ -33,134 +54,117 @@
     --shadow:0 2px 10px rgba(0,0,0,.1);
   }
 }
-body{font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;
-     min-height:100dvh;padding-bottom:env(safe-area-inset-bottom)}
 
-header{background:var(--s1);border-bottom:1px solid var(--brd);padding:0 18px;
-       padding-top:env(safe-area-inset-top);display:flex;align-items:center;gap:12px;
-       height:calc(52px + env(safe-area-inset-top));position:sticky;top:0;z-index:100}
-header h1{font-size:16px;font-weight:700;color:var(--acc);letter-spacing:.5px}
-header button.icon-btn{margin-left:auto}
+/* ── Ionic-Theme auf die Mirai-Farben mappen ───────────────────────── */
+:root{
+  --ion-font-family:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+  --ion-background-color:var(--bg);
+  --ion-text-color:var(--txt);
+  --ion-border-color:var(--brd);
+  --ion-item-background:var(--s1);
+  --ion-card-background:var(--s1);
+  --ion-toolbar-background:var(--s1);
+  --ion-toolbar-border-color:var(--brd);
 
-main{max-width:520px;margin:0 auto;padding:16px}
+  --ion-color-primary:var(--acc);
+  --ion-color-primary-rgb:102,205,0;
+  --ion-color-primary-contrast:#0e0e0e;
+  --ion-color-primary-contrast-rgb:14,14,14;
+  --ion-color-primary-shade:#5ab400;
+  --ion-color-primary-tint:#76d31a;
+
+  --ion-color-danger:var(--err);
+  --ion-color-danger-rgb:244,67,54;
+  --ion-color-danger-contrast:#ffffff;
+  --ion-color-danger-contrast-rgb:255,255,255;
+  --ion-color-danger-shade:#d73c30;
+  --ion-color-danger-tint:#f5574b;
+
+  --ion-color-medium:var(--txt2);
+  --ion-color-medium-rgb:136,136,136;
+  --ion-color-medium-contrast:#ffffff;
+  --ion-color-medium-contrast-rgb:255,255,255;
+  --ion-color-medium-shade:#787878;
+  --ion-color-medium-tint:#949494;
+}
+
+body{min-height:100vh;min-height:100dvh}
+.content-inner{max-width:520px;margin:0 auto}
 .screen{display:none}
 .screen.active{display:block}
 
-/* ── Panel-Liste ─────────────────────────────────────────── */
-.panel-card{background:var(--s1);border:1px solid var(--brd);border-radius:12px;
-            padding:16px 18px;margin-bottom:12px;display:flex;align-items:center;
-            gap:14px;cursor:pointer;box-shadow:var(--shadow);transition:border-color .15s}
-.panel-card:active{border-color:var(--acc)}
-.panel-card .room{font-size:16px;font-weight:600;color:var(--txt)}
-.panel-card .host{font-size:12px;color:var(--txt2);margin-top:2px}
-.panel-card .dot{width:10px;height:10px;border-radius:50%;background:var(--txt2);flex-shrink:0}
-.panel-card .dot.ok{background:var(--ok)}
+ion-title#header-title{color:var(--ion-color-primary);font-weight:700;letter-spacing:.5px}
+
+/* ── Panel-Liste: Online-Status-Punkt (echte Funktion seit 2026-10-05,
+   siehe pingPanel()) ───────────────────────────────────────────────── */
+.dot{width:10px;height:10px;border-radius:50%;background:var(--txt2);flex-shrink:0;align-self:center}
+.dot.ok{background:var(--ok)}
 .empty-hint{color:var(--txt2);font-size:14px;text-align:center;padding:40px 20px;line-height:1.6}
 
-.fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));
-     width:56px;height:56px;border-radius:50%;background:var(--acc);color:#0e0e0e;
-     border:none;font-size:28px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.4);
-     cursor:pointer;line-height:1}
-
-/* ── Formular (Panel hinzufuegen/bearbeiten) ────────────────── */
-.field{margin-bottom:16px}
-.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:6px}
-.field input{width:100%;background:var(--s2);border:1px solid var(--brd);border-radius:8px;
-             color:var(--txt);padding:11px 12px;font-size:15px;outline:none;font-family:inherit}
-.field input:focus{border-color:var(--acc)}
-.field-row{display:flex;gap:10px}
-.field-row .field{flex:1}
-.hint{font-size:12px;color:var(--txt2);margin:-8px 0 16px;line-height:1.5}
-
-.btn{padding:12px 20px;border:none;border-radius:8px;font-size:14px;font-weight:600;
-     cursor:pointer;width:100%;margin-bottom:10px;transition:transform .08s ease}
-.btn:active{transform:scale(.97)}
-.btn-primary{background:var(--acc);color:#0e0e0e}
-.btn-ghost{background:var(--s2);color:var(--txt);border:1px solid var(--brd)}
-.btn-danger{background:transparent;color:var(--err)}
-.icon-btn{background:none;border:none;color:var(--txt2);font-size:20px;cursor:pointer;padding:6px;
-          transition:transform .08s ease}
-.icon-btn:active{transform:scale(.9)}
+.hint{font-size:12px;color:var(--txt2);line-height:1.5;padding:0 16px 12px}
 
 /* ── Player ──────────────────────────────────────────────── */
-.player-room{font-size:22px;font-weight:700;text-align:center;margin:18px 0 6px}
-.player-status{font-size:13px;color:var(--txt2);text-align:center;margin-bottom:30px}
+.player-room{font-size:22px;font-weight:700;text-align:center;margin:20px 0 6px}
+.player-status{font-size:13px;color:var(--txt2);text-align:center;margin-bottom:28px}
 .player-status.ok{color:var(--ok)}
 .player-status.err{color:var(--err)}
 
-.rec-indicator{width:14px;height:14px;border-radius:50%;background:var(--err);
-                display:inline-block;margin-right:6px;animation:pulse 1.4s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-
 .stream-toggle{width:140px;height:140px;border-radius:50%;border:none;margin:10px auto;
                 display:block;font-size:15px;font-weight:700;cursor:pointer;
-                background:var(--s2);color:var(--txt);border:2px solid var(--brd);
-                transition:transform .08s ease,background .15s,border-color .15s}
+                background:linear-gradient(145deg,var(--s2),var(--s3));color:var(--txt);
+                border:2px solid var(--brd);box-shadow:0 6px 20px rgba(0,0,0,.35);
+                transition:transform .08s ease,background .2s,border-color .2s}
 .stream-toggle:active{transform:scale(.96)}
-.stream-toggle.live{background:var(--err);color:#fff;border-color:var(--err);
+.stream-toggle.live{background:linear-gradient(145deg,#ff6b5e,var(--err));color:#fff;border-color:var(--err);
                      animation:live-glow 2s ease-in-out infinite}
 @keyframes live-glow{
-  0%,100%{box-shadow:0 0 0 0 rgba(244,67,54,.5)}
-  50%{box-shadow:0 0 0 14px rgba(244,67,54,0)}
+  0%,100%{box-shadow:0 6px 20px rgba(0,0,0,.35),0 0 0 0 rgba(244,67,54,.5)}
+  50%{box-shadow:0 6px 20px rgba(0,0,0,.35),0 0 0 14px rgba(244,67,54,0)}
 }
 
-/* Settings-Karte: fasst Lautstaerke/Mute/Empfindlichkeit optisch zu einem
-   Block zusammen, abgesetzt vom grossen Start/Stop-Knopf darueber. */
-.settings-card{background:var(--s1);border:1px solid var(--brd);border-radius:16px;
-               padding:20px;margin-top:28px;box-shadow:var(--shadow)}
+.volume-block{padding:4px 0 8px}
+.volume-block .row{display:flex;justify-content:space-between;align-items:center;
+                    font-size:13px;color:var(--txt2);margin-bottom:2px}
+.volume-block .row ion-icon{font-size:16px;margin-right:6px;vertical-align:-3px;color:var(--ion-color-primary)}
 
-.volume-block{margin-top:0}
-.volume-block label{display:flex;justify-content:space-between;font-size:13px;
-                     color:var(--txt2);margin-bottom:10px}
-input[type=range]{width:100%;accent-color:var(--acc);height:28px}
+.mute-item{--padding-start:0;--inner-padding-end:0;--background:transparent}
 
-/* ── Toggle-Switch (statt nativer Checkbox) ───────────────────────── */
-.switch-row{display:flex;align-items:center;justify-content:space-between;
-            gap:14px;margin-top:22px;padding-top:20px;border-top:1px solid var(--brd)}
-.switch-row label[for]{font-size:13px;color:var(--txt);line-height:1.5}
-.switch{position:relative;display:inline-block;width:48px;height:28px;flex-shrink:0}
-.switch input{opacity:0;width:0;height:0}
-.switch-track{position:absolute;inset:0;background:var(--s3);border-radius:14px;
-              cursor:pointer;transition:background .15s}
-.switch-track::before{content:'';position:absolute;left:3px;top:3px;width:22px;height:22px;
-                       border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);
-                       transition:transform .15s}
-.switch input:checked + .switch-track{background:var(--acc)}
-.switch input:checked + .switch-track::before{transform:translateX(20px)}
-
-/* ── Live-Pegelbalken + Empfindlichkeits-Regler, verschmolzen zu einem
-   Widget: Leuchtbalken = aktuelle Lautstaerke, der Regler liegt direkt
-   darueber, sein Griff (schlichter weisser Strich statt rundem Knopf)
-   IST die Markierung fuer die gewaehlte Schwelle - keine zwei getrennten
-   Elemente mehr, nur noch Uebereinander-Legen von Glow + Strich. ────── */
-.level-meter{position:relative;width:100%;height:40px;border-radius:20px;
-             background:var(--s2);overflow:hidden}
+/* ── Empfindlichkeit: ion-segment (5 feste Stufen - der native Grund,
+   warum der Umstieg hierhin ueberhaupt losgetreten wurde: ein
+   handgebauter Regler-auf-Balken sah auf dem echten Geraet kaputt aus,
+   ion-segment ist eine fertige, durchgetestete Komponente genau fuer
+   "Auswahl aus N festen Optionen") + Live-Pegelbalken direkt darunter,
+   mit 5 Zonen-Trennern passend zu den 5 Segmenten. ───────────────────── */
+.sens-label-row{display:flex;justify-content:space-between;font-size:13px;
+                 color:var(--txt2);margin-bottom:10px}
+/* 5 Segmente muessen in die Kartenbreite passen, ohne zu scrollen oder
+   abgeschnitten zu werden - Ionics Default-Mindestbreite ist fuer einzelne
+   Ziffern unnoetig gross. */
+#sens-segmented ion-segment-button{min-width:0;--min-width:0}
+.level-meter{position:relative;width:100%;height:26px;margin-top:12px;
+             border-radius:13px;background:var(--s2);overflow:hidden}
 .level-meter-bar{position:absolute;left:0;top:0;bottom:0;width:0%;
-                  border-radius:20px;
                   background:linear-gradient(90deg,var(--acc),#9fe85a);
-                  box-shadow:0 0 18px 3px rgba(102,205,0,.5);
                   transition:width .09s linear}
-.level-meter input[type=range]{position:absolute;inset:0;width:100%;height:100%;
-             margin:0;background:transparent;-webkit-appearance:none;appearance:none;
-             cursor:pointer;z-index:1}
-.level-meter input[type=range]::-webkit-slider-runnable-track{background:transparent;height:100%}
-.level-meter input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
-             width:4px;height:34px;border-radius:3px;background:#fff;
-             box-shadow:0 0 8px rgba(0,0,0,.6);cursor:pointer}
-.level-meter input[type=range]::-moz-range-track{background:transparent;height:100%;border:none}
-.level-meter input[type=range]::-moz-range-thumb{width:4px;height:34px;border:none;
-             border-radius:3px;background:#fff;box-shadow:0 0 8px rgba(0,0,0,.6);cursor:pointer}
+.level-meter-ticks{position:absolute;inset:0;display:flex}
+.level-meter-ticks span{flex:1;border-right:1px solid rgba(128,128,128,.25)}
+.level-meter-ticks span:last-child{border-right:none}
+.level-meter-mark{position:absolute;top:-4px;bottom:-4px;width:3px;
+                   background:var(--txt);border-radius:2px;left:0%}
 
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
        background:var(--s3);color:var(--txt);padding:10px 18px;border-radius:8px;
-       font-size:13px;box-shadow:var(--shadow);z-index:200;opacity:0;
+       font-size:13px;box-shadow:var(--shadow);z-index:20000;opacity:0;
        transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 
-.alert-banner{display:none;margin:0 0 20px;padding:14px 18px;border-radius:10px;
-              background:var(--err);color:#fff;font-size:14px;font-weight:700;
-              text-align:center;cursor:pointer;animation:alert-pulse 1s infinite}
+.alert-banner{display:none;margin:0 0 20px;padding:14px 18px;border-radius:12px;
+              background:linear-gradient(135deg,#ff6b5e,var(--err));color:#fff;
+              font-size:14px;font-weight:700;text-align:center;cursor:pointer;
+              box-shadow:0 4px 16px rgba(244,67,54,.4);animation:alert-pulse 1s infinite}
 .alert-banner.show{display:block}
+.alert-banner ion-icon{vertical-align:-3px;margin-right:4px}
+@keyframes alert-pulse{0%,100%{opacity:1}50%{opacity:.75}}
 
 /* ── Info-Panel (Empfangsmenge + Diagnose-Log), per ⓘ-Button togglebar ── */
 .info-panel{display:none;margin-top:24px;padding-top:16px;border-top:1px solid var(--brd)}
@@ -169,148 +173,193 @@ input[type=range]{width:100%;accent-color:var(--acc);height:28px}
 .debug-log{background:var(--s2);border:1px solid var(--brd);border-radius:8px;
            color:var(--txt2);font-size:11px;font-family:monospace;padding:10px;
            max-height:40vh;overflow:auto;white-space:pre-wrap}
-@keyframes alert-pulse{0%,100%{opacity:1}50%{opacity:.6}}
 </style>
 </head>
 <body>
 
-<header>
-  <button class="icon-btn" id="btn-back" style="visibility:hidden">‹</button>
-  <h1 id="header-title">MiraiFon</h1>
-  <!-- Nur auf dem Player-Screen sichtbar (siehe showScreen()) - zeigt/
-       versteckt das Info-Panel mit Empfangsmenge + Diagnose-Log, die auf
-       der Hauptseite nur stoeren wuerden. -->
-  <button class="icon-btn" id="btn-info" style="visibility:hidden;margin-left:auto">ⓘ</button>
-</header>
+<ion-app>
+  <ion-header>
+    <ion-toolbar>
+      <ion-buttons slot="start">
+        <ion-button id="btn-back" style="visibility:hidden">
+          <ion-icon slot="icon-only" src="icons/chevron-back.svg"></ion-icon>
+        </ion-button>
+      </ion-buttons>
+      <ion-title id="header-title">MiraiFon</ion-title>
+      <ion-buttons slot="end">
+        <!-- Nur auf dem Player-Screen sichtbar (siehe showScreen()) - zeigt/
+             versteckt das Info-Panel mit Empfangsmenge + Diagnose-Log. -->
+        <ion-button id="btn-info" style="visibility:hidden">
+          <ion-icon slot="icon-only" src="icons/information-circle-outline.svg"></ion-icon>
+        </ion-button>
+      </ion-buttons>
+    </ion-toolbar>
+  </ion-header>
 
-<main>
+  <ion-content class="ion-padding">
+    <div class="content-inner">
 
-  <!-- ══════════ Screen: Panel-Liste ══════════ -->
-  <section class="screen active" id="screen-list">
-    <div id="panel-list"></div>
-    <div class="empty-hint" id="empty-hint" style="display:none">
-      Noch kein Panel gekoppelt.<br>Tippe unten auf "+", um eines hinzuzufügen.
-    </div>
-  </section>
-
-  <!-- ══════════ Screen: Panel hinzufuegen/bearbeiten ══════════ -->
-  <section class="screen" id="screen-edit">
-    <button class="btn btn-primary" id="btn-scan-qr" style="margin-bottom:18px">QR-Code am Panel scannen</button>
-    <p class="hint" id="scan-only-hint" style="margin-top:-10px">
-      Panel: Einstellungen → "MiraiFon koppeln" → mit der Kamera scannen.
-      Oder darunter manuell eintragen.
-    </p>
-
-    <div class="field">
-      <label>Raumname</label>
-      <input type="text" id="f-room" placeholder="Kinderzimmer">
-    </div>
-    <div class="field-row">
-      <div class="field">
-        <label>Host / IP</label>
-        <input type="text" id="f-host" placeholder="192.168.179.55">
-      </div>
-      <div class="field" style="flex:0 0 90px">
-        <label>Port</label>
-        <input type="number" id="f-port" value="5000">
-      </div>
-    </div>
-    <div class="field">
-      <label>Auth-Token</label>
-      <input type="text" id="f-token" placeholder="vom Panel">
-    </div>
-    <div class="field">
-      <label>LoxBerry-IP (optional)</label>
-      <input type="text" id="f-bridge" placeholder="für HTTPS/Benachrichtigungen">
-    </div>
-    <p class="hint">
-      Mit LoxBerry-IP läuft die Verbindung verschlüsselt über den LoxBerry
-      (nötig für Benachrichtigungen/Kamera) — beim ersten Mal einmalig dem
-      Zertifikat vertrauen. Ohne läuft's direkt ans Panel (nur im Heimnetz,
-      ohne Benachrichtigungen).
-    </p>
-    <button class="btn btn-primary" id="btn-save">Speichern</button>
-    <button class="btn btn-ghost" id="btn-cancel">Abbrechen</button>
-    <button class="btn btn-danger" id="btn-delete" style="display:none">Panel entfernen</button>
-  </section>
-
-  <!-- ══════════ Screen: QR-Scan (Kamera) ══════════ -->
-  <section class="screen" id="screen-scan">
-    <video id="scan-video" autoplay playsinline muted
-           style="width:100%;border-radius:12px;background:#000"></video>
-    <p class="hint" id="scan-status">Kamera wird gestartet…</p>
-    <button class="btn btn-ghost" id="btn-scan-cancel">Abbrechen</button>
-  </section>
-
-  <!-- ══════════ Screen: Player ══════════ -->
-  <section class="screen" id="screen-player">
-    <div class="player-room" id="p-room">—</div>
-    <div class="player-status" id="p-status">Nicht verbunden</div>
-
-    <!-- Lautstaerke-Warnung vom Panel (siehe babyfon_stream.h check_alert_())
-         - per Default versteckt, wird bei eingehender {"type":"alert"}
-         Text-Nachricht kurz eingeblendet. -->
-    <div class="alert-banner" id="alert-banner" onclick="this.classList.remove('show')">
-      ⚠ Laute Geräusche erkannt
-    </div>
-
-    <button class="stream-toggle" id="btn-toggle-stream">Start</button>
-
-    <!-- Alles, was nicht die Haupt-Aktion (Start/Stop) ist, gruppiert in
-         einer eigenen Karte - trennt optisch "das Eine, das man staendig
-         antippt" von "Einstellungen, die man selten anfasst". -->
-    <div class="settings-card">
-      <div class="volume-block">
-        <label><span>Lautstärke</span><span id="p-vol-val">100%</span></label>
-        <input type="range" id="p-volume" min="0" max="200" value="100">
-      </div>
-
-      <!-- Standard = durchgehend hoerbar (echtes Babyphone-Verhalten, auch
-           im Hintergrund) - diese Option ist bewusst ein Opt-in fuer alle,
-           die lieber nur bei Alarm etwas hoeren wollen (Akku/Dauerrauschen).
-           Mute passiert rein am Gain-Node (siehe visibilitychange unten),
-           die Erkennung selbst laeuft ohnehin am Panel, nicht am Handy. -->
-      <div class="switch-row">
-        <label for="p-mute-bg">Im Hintergrund stummschalten<br><span class="hint" style="margin:0">Nur bei Alarm hörbar</span></label>
-        <label class="switch">
-          <input type="checkbox" id="p-mute-bg">
-          <span class="switch-track"></span>
-        </label>
-      </div>
-
-      <!-- Empfindlichkeit der Lautstaerke-Warnung: bewusst 5 benannte Stufen
-           statt einer rohen RMS-Zahl (siehe cfg_babyfon_alert_threshold am
-           Panel) - niemand, der nicht am Firmware-Code sitzt, kann mit
-           "0.15" etwas anfangen. Der Pegelbalken darunter zeigt live mit,
-           wie laut es gerade ist (aus den sowieso ankommenden PCM-Daten
-           lokal berechnet, kein neuer Panel-Endpunkt noetig) - der
-           Regler-Griff auf dem Balken markiert die gewaehlte Stufe, als
-           Kalibrierungs-Hilfe ("mach mal Krach, schau wo der Balken
-           steht"). Nur sinnvoll benutzbar, waehrend der Stream laeuft. -->
-      <div class="field" style="margin-top:22px;margin-bottom:0">
-        <label style="display:flex;justify-content:space-between;font-size:13px;color:var(--txt2);margin-bottom:8px">
-          <span>Empfindlichkeit Lautstärke-Warnung</span><span id="p-sens-val">Normal</span>
-        </label>
-        <div class="level-meter" id="level-meter">
-          <div class="level-meter-bar" id="level-meter-bar"></div>
-          <input type="range" id="p-sensitivity" min="0" max="4" step="1" value="2">
+      <!-- ══════════ Screen: Panel-Liste ══════════ -->
+      <section class="screen active" id="screen-list">
+        <ion-list id="panel-list" lines="full"></ion-list>
+        <div class="empty-hint" id="empty-hint" style="display:none">
+          Noch kein Panel gekoppelt.<br>Tippe unten auf "+", um eines hinzuzufügen.
         </div>
-        <div class="hint">Balken = aktuelle Lautstärke, Strich = gewählte Warnschwelle. Nur während des Streams aktuell.</div>
-      </div>
+      </section>
+
+      <!-- ══════════ Screen: Panel hinzufuegen/bearbeiten ══════════ -->
+      <section class="screen" id="screen-edit">
+        <ion-button expand="block" id="btn-scan-qr">
+          <ion-icon slot="start" src="icons/camera-outline.svg"></ion-icon>
+          QR-Code am Panel scannen
+        </ion-button>
+        <p class="hint" id="scan-only-hint" style="padding:0 0 18px">
+          Panel: Einstellungen → "MiraiFon koppeln" → mit der Kamera scannen.
+          Oder darunter manuell eintragen.
+        </p>
+
+        <ion-list>
+          <ion-item>
+            <ion-input id="f-room" label="Raumname" label-placement="stacked" placeholder="Kinderzimmer"></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-input id="f-host" label="Host / IP" label-placement="stacked" placeholder="192.168.179.55"></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-input id="f-port" type="number" label="Port" label-placement="stacked" value="5000"></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-input id="f-token" label="Auth-Token" label-placement="stacked" placeholder="vom Panel"></ion-input>
+          </ion-item>
+          <ion-item lines="none">
+            <ion-input id="f-bridge" label="LoxBerry-IP (optional)" label-placement="stacked" placeholder="für HTTPS/Benachrichtigungen"></ion-input>
+          </ion-item>
+        </ion-list>
+        <p class="hint">
+          Mit LoxBerry-IP läuft die Verbindung verschlüsselt über den LoxBerry
+          (nötig für Benachrichtigungen/Kamera) — beim ersten Mal einmalig dem
+          Zertifikat vertrauen. Ohne läuft's direkt ans Panel (nur im Heimnetz,
+          ohne Benachrichtigungen).
+        </p>
+        <div style="margin-top:8px">
+          <ion-button expand="block" id="btn-save">Speichern</ion-button>
+          <ion-button expand="block" fill="outline" id="btn-cancel">Abbrechen</ion-button>
+          <ion-button expand="block" fill="clear" color="danger" id="btn-delete" style="display:none">
+            <ion-icon slot="start" src="icons/trash-outline.svg"></ion-icon>
+            Panel entfernen
+          </ion-button>
+        </div>
+      </section>
+
+      <!-- ══════════ Screen: QR-Scan (Kamera) ══════════ -->
+      <section class="screen" id="screen-scan">
+        <video id="scan-video" autoplay playsinline muted
+               style="width:100%;border-radius:12px;background:#000"></video>
+        <p class="hint" id="scan-status" style="padding:12px 0">Kamera wird gestartet…</p>
+        <ion-button expand="block" fill="outline" id="btn-scan-cancel">Abbrechen</ion-button>
+      </section>
+
+      <!-- ══════════ Screen: Player ══════════ -->
+      <section class="screen" id="screen-player">
+        <div class="player-room" id="p-room">—</div>
+        <div class="player-status" id="p-status">Nicht verbunden</div>
+
+        <!-- Lautstaerke-Warnung vom Panel (siehe babyfon_stream.h check_alert_())
+             - per Default versteckt, wird bei eingehender {"type":"alert"}
+             Text-Nachricht kurz eingeblendet. -->
+        <div class="alert-banner" id="alert-banner" onclick="this.classList.remove('show')">
+          <ion-icon src="icons/warning.svg"></ion-icon>Laute Geräusche erkannt
+        </div>
+
+        <button class="stream-toggle" id="btn-toggle-stream">Start</button>
+
+        <!-- Alles, was nicht die Haupt-Aktion (Start/Stop) ist, gruppiert in
+             einer eigenen Karte - trennt optisch "das Eine, das man staendig
+             antippt" von "Einstellungen, die man selten anfasst". -->
+        <ion-card style="margin-top:28px">
+          <ion-card-content>
+            <div class="volume-block">
+              <div class="row"><span><ion-icon src="icons/volume-high-outline.svg"></ion-icon>Lautstärke</span><span id="p-vol-val">100%</span></div>
+              <ion-range id="p-volume" min="0" max="200" value="100" color="primary"></ion-range>
+            </div>
+
+            <!-- Mute-Toggle + Empfindlichkeit werden selten angefasst (einmal
+                 einstellen, dann laengere Zeit nicht mehr) - anders als die
+                 Lautstaerke, die man staendig nachregelt. Hinter einem
+                 Akkordeon versteckt haelt das die Hauptseite ruhig; die
+                 Empfindlichkeits-Zahlen sieht man dann nur noch, wenn man
+                 aktiv reintippt (Nutzerwunsch 2026-10-05). -->
+            <ion-accordion-group>
+              <ion-accordion value="settings">
+                <ion-item slot="header" lines="full" style="--padding-start:0">
+                  <ion-icon slot="start" src="icons/settings-outline.svg"></ion-icon>
+                  <ion-label>Weitere Einstellungen</ion-label>
+                </ion-item>
+                <div slot="content" class="ion-padding-top">
+                  <!-- Standard = durchgehend hoerbar (echtes Babyphone-Verhalten,
+                       auch im Hintergrund) - diese Option ist bewusst ein Opt-in
+                       fuer alle, die lieber nur bei Alarm etwas hoeren wollen
+                       (Akku/Dauerrauschen). Mute passiert rein am Gain-Node
+                       (siehe visibilitychange unten), die Erkennung selbst
+                       laeuft ohnehin am Panel, nicht am Handy. -->
+                  <ion-item class="mute-item" lines="full">
+                    <ion-toggle id="p-mute-bg" justify="space-between">Im Hintergrund stummschalten</ion-toggle>
+                  </ion-item>
+                  <p class="hint" style="padding:6px 0 0">Nur bei Alarm hörbar</p>
+
+                  <!-- Empfindlichkeit der Lautstaerke-Warnung: bewusst 5 benannte
+                       Stufen statt einer rohen RMS-Zahl (siehe
+                       cfg_babyfon_alert_threshold am Panel) - niemand, der nicht
+                       am Firmware-Code sitzt, kann mit "0.15" etwas anfangen.
+                       ion-segment statt Schieberegler: fuer eine Auswahl aus 5
+                       FESTEN Stufen ist ein Regler das falsche Element. Der
+                       Pegelbalken darunter zeigt live mit, wie laut es gerade
+                       ist (aus den sowieso ankommenden PCM-Daten lokal
+                       berechnet) - die Markierung zeigt die gewaehlte Stufe.
+                       Nur sinnvoll benutzbar, waehrend der Stream laeuft. -->
+                  <div style="margin-top:22px">
+                    <div class="sens-label-row">
+                      <span>Empfindlichkeit Lautstärke-Warnung</span><span id="p-sens-val">Normal</span>
+                    </div>
+                    <ion-segment id="sens-segmented" value="2" color="primary">
+                      <ion-segment-button value="0"><ion-label>1</ion-label></ion-segment-button>
+                      <ion-segment-button value="1"><ion-label>2</ion-label></ion-segment-button>
+                      <ion-segment-button value="2"><ion-label>3</ion-label></ion-segment-button>
+                      <ion-segment-button value="3"><ion-label>4</ion-label></ion-segment-button>
+                      <ion-segment-button value="4"><ion-label>5</ion-label></ion-segment-button>
+                    </ion-segment>
+                    <div class="level-meter" id="level-meter">
+                      <div class="level-meter-bar" id="level-meter-bar"></div>
+                      <div class="level-meter-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+                      <div class="level-meter-mark" id="level-meter-mark"></div>
+                    </div>
+                    <p class="hint" style="padding:8px 0 0">Balken = aktuelle Lautstärke, Strich = gewählte Warnschwelle. Nur während des Streams aktuell.</p>
+                  </div>
+                </div>
+              </ion-accordion>
+            </ion-accordion-group>
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Per Info-Button (ⓘ oben) ein-/ausblendbar - Empfangsmenge +
+             Diagnose-Log gehoeren nicht auf die Hauptseite, sind aber fuers
+             Debuggen (z.B. "kommen ueberhaupt Daten an?") weiter nuetzlich. -->
+        <div class="info-panel" id="info-panel">
+          <div class="info-row" id="p-bytes">0 KB empfangen</div>
+          <div class="debug-log" id="debug-log"></div>
+        </div>
+      </section>
+
     </div>
 
-    <!-- Per Info-Button (ⓘ oben) ein-/ausblendbar - Empfangsmenge +
-         Diagnose-Log gehoeren nicht auf die Hauptseite, sind aber fuers
-         Debuggen (z.B. "kommen ueberhaupt Daten an?") weiter nuetzlich. -->
-    <div class="info-panel" id="info-panel">
-      <div class="info-row" id="p-bytes">0 KB empfangen</div>
-      <div class="debug-log" id="debug-log"></div>
-    </div>
-  </section>
+    <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+      <ion-fab-button id="btn-add" color="primary">
+        <ion-icon src="icons/add.svg"></ion-icon>
+      </ion-fab-button>
+    </ion-fab>
+  </ion-content>
+</ion-app>
 
-</main>
-
-<button class="fab" id="btn-add">+</button>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -369,15 +418,19 @@ function renderList() {
   list.innerHTML = '';
   document.getElementById('empty-hint').style.display = panels.length ? 'none' : 'block';
   panels.forEach(p => {
-    const card = document.createElement('div');
-    card.className = 'panel-card';
+    const card = document.createElement('ion-item');
+    card.button = true;
+    card.detail = false;
     card.innerHTML = `
-      <div class="dot" title="Status wird geprüft…"></div>
-      <div style="flex:1">
-        <div class="room">${escapeHtml(p.room)}</div>
-        <div class="host">${escapeHtml(p.host)}:${p.port}</div>
-      </div>
-      <button class="icon-btn edit-btn" data-id="${p.id}">⚙</button>
+      <ion-icon slot="start" src="icons/mic-outline.svg" style="color:var(--ion-color-primary)"></ion-icon>
+      <ion-label>
+        <h2>${escapeHtml(p.room)}</h2>
+        <p>${escapeHtml(p.host)}:${p.port}</p>
+      </ion-label>
+      <span class="dot" slot="end" title="Status wird geprüft…"></span>
+      <ion-button slot="end" fill="clear" class="edit-btn" data-id="${p.id}">
+        <ion-icon slot="icon-only" src="icons/settings-outline.svg"></ion-icon>
+      </ion-button>
     `;
     card.addEventListener('click', (e) => {
       if (e.target.closest('.edit-btn')) return;
@@ -395,12 +448,9 @@ function renderList() {
 // aber JEDE Antwort (auch 401 bei falschem Token) schon als "erreichbar" -
 // hier geht es nur um "ist das Geraet gerade online", nicht um Auth.
 function pingPanel(p, dotEl) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 4000);
-  fetch(babyfonConfigUrl(p), { headers: { 'X-Auth-Token': p.token }, signal: ctrl.signal })
+  babyfonFetch(babyfonConfigUrl(p), { token: p.token })
     .then(() => { dotEl.classList.add('ok'); dotEl.title = 'Online'; })
-    .catch(() => { dotEl.classList.remove('ok'); dotEl.title = 'Nicht erreichbar'; })
-    .finally(() => clearTimeout(timer));
+    .catch(() => { dotEl.classList.remove('ok'); dotEl.title = 'Nicht erreichbar'; });
 }
 function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -423,11 +473,11 @@ document.getElementById('btn-add').addEventListener('click', () => openEdit(null
 document.getElementById('btn-cancel').addEventListener('click', () => showScreen('screen-list'));
 
 document.getElementById('btn-save').addEventListener('click', () => {
-  const room   = document.getElementById('f-room').value.trim();
-  const host   = document.getElementById('f-host').value.trim();
+  const room   = (document.getElementById('f-room').value || '').trim();
+  const host   = (document.getElementById('f-host').value || '').trim();
   const port   = parseInt(document.getElementById('f-port').value, 10) || 5000;
-  const token  = document.getElementById('f-token').value.trim();
-  const bridge = document.getElementById('f-bridge').value.trim();
+  const token  = (document.getElementById('f-token').value || '').trim();
+  const bridge = (document.getElementById('f-bridge').value || '').trim();
   if (!room || !host) { toast('Raumname und Host/IP werden benötigt'); return; }
 
   if (editingId) {
@@ -542,8 +592,7 @@ document.getElementById('btn-scan-cancel').addEventListener('click', () => {
 });
 
 // ── Player: Audio-Streaming ────────────────────────────────
-// PROTOKOLL (panel-seitig noch zu bauen, siehe Projekt-Notizen "Babyfon-App"):
-// WebSocket ws://<host>:<port>/api/babyfon/stream?token=<token>
+// PROTOKOLL: WebSocket ws://<host>:<port>/api/babyfon/stream?token=<token>
 // Server -> Client: binaere Frames, roh PCM s16le, Stereo, 44100 Hz
 // (exakt das Format, das das Panel schon fuer den Sonn-Core-Ingest erzeugt
 // - siehe custom-components/babymonitor_stream.h - liesse sich dort also
@@ -573,7 +622,9 @@ document.getElementById('btn-toggle-stream').addEventListener('click', () => {
   if (ws) stopStream(); else startStream();
 });
 
-document.getElementById('p-volume').addEventListener('input', (e) => {
+// ion-range feuert "ionInput" waehrend des Ziehens (Live-Update, entspricht
+// dem nativen "input"-Event) und "ionChange" erst beim Loslassen.
+document.getElementById('p-volume').addEventListener('ionInput', (e) => {
   document.getElementById('p-vol-val').textContent = e.target.value + '%';
   if (gainNode) gainNode.gain.value = e.target.value / 100;
 });
@@ -587,12 +638,25 @@ document.getElementById('p-volume').addEventListener('input', (e) => {
 // hoerbar, danach (falls immer noch im Hintergrund) erneut stumm.
 const btnMuteBg = document.getElementById('p-mute-bg');
 btnMuteBg.checked = localStorage.getItem('miraifon_mute_bg') === '1';
-btnMuteBg.addEventListener('change', () => {
+btnMuteBg.addEventListener('ionChange', () => {
   localStorage.setItem('miraifon_mute_bg', btnMuteBg.checked ? '1' : '0');
   if (!btnMuteBg.checked && isBgMuted) unmuteForBackground();
 });
 let isBgMuted = false;
-let alertUnmuteTimer = null;
+// Zeitpunkt (Date.now()-Millisekunden), bis zu dem der Ton nach einem Alarm
+// wieder hoerbar bleiben soll - 0 = kein aktiver "kurz aufgedeckt"-Zustand.
+// BEWUSST kein setTimeout()/clearTimeout() mehr dafuer (Bug 2026-10-07,
+// echtes Hardware-Testergebnis: Ton ging nach einem Alarm an und blieb an,
+// das Zurueck-Stummschalten passierte nie): Chrome/Android drosselt JS-
+// Timer auf einer Seite, die als "hidden" (document.visibilityState)
+// gilt, UNABHAENGIG davon, ob der Foreground-Service den Prozess selbst am
+// Leben haelt - der Service verhindert nur, dass Android den Prozess
+// killt, nicht dass Chromiums eigener Scheduler Timer auf einer
+// Hintergrundseite zurueckhaelt. Audio-Pakete kommen nachweislich auch im
+// Hintergrund zuverlaessig an (sonst waere ja gar kein Ton zu hoeren) -
+// die Pruefung "ist die Gnadenfrist vorbei?" haengt deshalb stattdessen an
+// playPcmChunk() (siehe dort), nicht an einem Timer.
+let alertUnmuteUntil = 0;
 function muteForBackground() {
   if (!gainNode || isBgMuted) return;
   isBgMuted = true;
@@ -605,9 +669,12 @@ function unmuteForBackground() {
 }
 document.addEventListener('visibilitychange', () => {
   if (!gainNode || !btnMuteBg.checked) return;
-  clearTimeout(alertUnmuteTimer);
-  if (document.visibilityState === 'hidden') muteForBackground();
-  else unmuteForBackground();
+  if (document.visibilityState === 'hidden') {
+    muteForBackground();
+  } else {
+    alertUnmuteUntil = 0; // zurueck im Vordergrund - keine verspaetete Stummschaltung mehr noetig
+    unmuteForBackground();
+  }
 });
 
 // ── Empfindlichkeit Lautstaerke-Warnung ─────────────────────────────────
@@ -636,6 +703,32 @@ function babyfonConfigUrl(p) {
     : `http://${p.host}:${p.port}/api/babyfon/config`;
 }
 
+// fetch() vs. nativer HTTP-Client (Bug 2026-10-05): die SSL-Ausnahme fuer
+// den wss-Proxy (selbstsigniertes Zertifikat, siehe MainActivity.java
+// onReceivedSslError) greift fuer die WebSocket-Hauptverbindung, aber
+// NICHT fuer normale fetch()-Subresource-Requests aus der WebView -
+// bekanntes Android-WebView-Verhalten. In der nativen App laeuft dieser
+// Aufruf deshalb ueber BabyfonForeground.httpRequest() (volle, direkte
+// TLS-Kontrolle, siehe BabyfonPlugin.kt), im Browser/PWA bleibt es bei
+// fetch() (dort funktioniert das normale Zertifikat-Vertrauen bereits).
+function babyfonFetch(url, opts = {}) {
+  const method = opts.method || 'GET';
+  const token = opts.token || '';
+  const body = opts.body;
+  if (isNativeAndroid()) {
+    return window.Capacitor.Plugins.BabyfonForeground
+      .httpRequest({ url, method, token, body })
+      .then((res) => JSON.parse(res.body || '{}'));
+  }
+  const headers = { 'X-Auth-Token': token };
+  if (body) headers['Content-Type'] = 'application/json';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 5000);
+  return fetch(url, { method, headers, body, signal: ctrl.signal })
+    .then((r) => r.json())
+    .finally(() => clearTimeout(timer));
+}
+
 function nearestSensitivityIndex(threshold) {
   let best = 2, bestDiff = Infinity;
   SENSITIVITY_LEVELS.forEach((lvl, i) => {
@@ -645,33 +738,38 @@ function nearestSensitivityIndex(threshold) {
   return best;
 }
 
-const sensInput = document.getElementById('p-sensitivity');
+const sensSegmented = document.getElementById('sens-segmented');
 const sensLabel = document.getElementById('p-sens-val');
+let sensIdx = 2;
+
+function updateSensitivityMark(idx) {
+  const pct = Math.min(100, (SENSITIVITY_LEVELS[idx].value / LEVEL_METER_MAX) * 100);
+  document.getElementById('level-meter-mark').style.left = pct + '%';
+}
+
+function showSensitivityIndex(idx) {
+  sensIdx = idx;
+  sensSegmented.value = String(idx); // programmatisch - loest KEIN ionChange aus (wie bei nativen Elementen)
+  sensLabel.textContent = SENSITIVITY_LEVELS[idx].label;
+  updateSensitivityMark(idx);
+}
 
 function loadSensitivity(p) {
-  fetch(babyfonConfigUrl(p), { headers: { 'X-Auth-Token': p.token } })
-    .then((r) => r.json())
-    .then((data) => {
-      const idx = nearestSensitivityIndex(data.alert_threshold || 0.1);
-      sensInput.value = idx;
-      sensLabel.textContent = SENSITIVITY_LEVELS[idx].label;
-    })
+  babyfonFetch(babyfonConfigUrl(p), { token: p.token })
+    .then((data) => showSensitivityIndex(nearestSensitivityIndex(data.alert_threshold || 0.1)))
     .catch((e) => debugLog('Empfindlichkeit laden fehlgeschlagen: ' + e));
 }
 
-sensInput.addEventListener('input', () => {
-  sensLabel.textContent = SENSITIVITY_LEVELS[sensInput.value].label;
-});
-sensInput.addEventListener('change', () => {
+sensSegmented.addEventListener('ionChange', (e) => {
+  const idx = Number(e.detail.value);
+  showSensitivityIndex(idx);
   const p = panels.find(x => x.id === activePanel);
   if (!p) return;
-  const threshold = SENSITIVITY_LEVELS[sensInput.value].value;
-  fetch(babyfonConfigUrl(p), {
+  babyfonFetch(babyfonConfigUrl(p), {
     method: 'POST',
-    headers: { 'X-Auth-Token': p.token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ alert_threshold: threshold }),
+    token: p.token,
+    body: JSON.stringify({ alert_threshold: SENSITIVITY_LEVELS[idx].value }),
   })
-    .then((r) => r.json())
     .then(() => toast('Empfindlichkeit gespeichert'))
     .catch((e) => { debugLog('Empfindlichkeit speichern fehlgeschlagen: ' + e); toast('Fehler beim Speichern'); });
 });
@@ -810,13 +908,9 @@ function handleTextMessage(raw) {
   // stummschalten, wenn der Nutzer inzwischen zurueckgekehrt ist).
   if (isBgMuted) {
     unmuteForBackground();
-    clearTimeout(alertUnmuteTimer);
-    alertUnmuteTimer = setTimeout(() => {
-      // Nur erneut stummschalten, wenn die Option noch an ist UND die App
-      // immer noch im Hintergrund ist (sonst wuerde ein zurueckgekehrter
-      // Nutzer ploetzlich ohne eigenes Zutun stummgeschaltet).
-      if (btnMuteBg.checked && document.visibilityState === 'hidden') muteForBackground();
-    }, 15000);
+    // Gnadenfrist-Ende wird in playPcmChunk() geprueft, nicht per
+    // setTimeout (siehe Kommentar bei alertUnmuteUntil oben).
+    alertUnmuteUntil = Date.now() + 15000;
   }
 
   // Native Android-Benachrichtigung (Phase 2) - kommt zuverlaessig auch mit
@@ -909,6 +1003,16 @@ function setStatus(text, cls) {
 let bytesReceivedTotal = 0;
 function playPcmChunk(buf) {
   if (!audioCtx) return;
+
+  // Gnadenfrist nach einem Alarm ("kurz aufdecken") hier statt per
+  // setTimeout pruefen - siehe ausfuehrlicher Kommentar bei
+  // alertUnmuteUntil weiter oben. Jeder ankommende Audio-Chunk ist ein
+  // verlaesslicher "Tick" dafuer, auch mit ausgeschaltetem Bildschirm.
+  if (alertUnmuteUntil && Date.now() >= alertUnmuteUntil) {
+    alertUnmuteUntil = 0;
+    if (btnMuteBg.checked && document.visibilityState === 'hidden') muteForBackground();
+  }
+
   const view = new DataView(buf);
   const frameCount = buf.byteLength / 4; // 4 Byte/Frame: 2 Kanaele * 2 Byte
   if (frameCount <= 0) return;
@@ -947,7 +1051,7 @@ function playPcmChunk(buf) {
 
 // ── Init ───────────────────────────────────────────────────
 renderList();
-debugLog('Script geladen (debug-v3), Origin=' + location.origin);
+debugLog('Script geladen (debug-v3, Ionic), Origin=' + location.origin);
 
 // Eigener, lauter Kanal nur fuer die Lautstaerke-Warnung (IMPORTANCE_HIGH =
 // Ton+Vibration+Heads-up) - bewusst getrennt vom leisen "Babyfon aktiv"-

@@ -1,0 +1,4 @@
+/*!
+ * (C) Ionic http://ionicframework.com - MIT License
+ */
+import{b as t,w as o,q as n}from"./p-B4xjg_Qu.js";const s=(n,s,e,r=[])=>{let i,a=t(n,s);const c=s.filter((t=>!r.includes(t))),u=new Set,b=(t,o)=>{null===o?u.delete(t):u.add(t)},l=()=>{void 0===i&&0!==c.length&&void 0!==o&&"MutationObserver"in o&&((()=>{const t={};for(const o of c){const s=n.getAttribute(o),e=u.has(o);b(o,s),null===s&&!e||s===a[o]||(t[o]=s)}Object.keys(t).length>0&&(a={...a,...t},e())})(),i=new MutationObserver((t=>{const o={};for(const s of t){const t=s.attributeName,e=n.getAttribute(t);b(t,e),o[t]=e}a={...a,...o},e()})),i.observe(n,{attributeFilter:c}))};return l(),{get attributes(){return a},init:l,destroy:()=>{i?.disconnect(),i=void 0}}},e=(t,o,e=[])=>s(t,n,o,e);export{s as a,e as c}

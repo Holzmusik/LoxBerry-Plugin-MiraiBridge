@@ -2,6 +2,18 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-11-19 (2)
+
+### Fix
+- **Loxone-Radio-Sender spielten fast nie**: `loxone_radio_setup.js` legte die
+  13 kuratierten Sender bisher mit der umleitenden `play.cgi?stream=<mount>`-
+  URL an (liefert nur einen 302-Redirect) — Sonn Cores Stream-Client folgt
+  dem offenbar nicht zuverlässig. Zeigt jetzt direkt auf die aufgelöste
+  `https://de.streampal.net/streams/mounts/<mount>`-URL (sofort HTTP 200/
+  audio-mpeg, kein Redirect mehr). Betrifft nur NEU eingerichtete Sender —
+  bereits angelegte müssen in Sonn Core gelöscht und per "Sender
+  einrichten"-Button neu angelegt werden.
+
 ## [Unreleased] - 2026-11-19
 
 ### Fix

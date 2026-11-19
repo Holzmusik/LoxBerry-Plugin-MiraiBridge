@@ -6,9 +6,17 @@
 // audio/cfg/getservicefolder/loxoneradio/...) — Sonn Core hat das nicht.
 // Die 13 Sender sind technisch ein White-Label-Dienst der Firma Streampal
 // (streampal.de), deren Streams auch ganz normal offen (ohne Client-
-// Zertifikat) über https://de.streampal.net/play.cgi?stream=<mount>
-// erreichbar sind (Herkunft/Details: reference_loxone_radio_streampal_urls
-// Memory-Datei, 2026-09-29 per FritzBox-Paketmitschnitt gefunden).
+// Zertifikat) erreichbar sind (Herkunft/Details: reference_loxone_radio_
+// streampal_urls Memory-Datei, 2026-09-29 per FritzBox-Paketmitschnitt
+// gefunden). URL unten zeigt DIREKT auf https://de.streampal.net/streams/
+// mounts/<mount> statt auf .../play.cgi?stream=<mount> (2026-11-19
+// umgestellt): play.cgi antwortet nur mit einem 302-Redirect genau
+// dorthin — auf Hardware beobachtet als Ursache für "Sender spielt fast
+// nie" (Sonn Cores Stream-Client folgt dem Redirect offenbar nicht
+// zuverlässig). Die direkte Ziel-URL liefert sofort HTTP 200/audio-mpeg,
+// kein Redirect mehr nötig. Bereits ueber die alte URL angelegte Sender
+// muessen in Sonn Core geloescht und per Button neu eingerichtet werden,
+// die Idempotenz-Pruefung unten erkennt nur den Namen, nicht die URL.
 //
 // Registrierung laeuft ZENTRAL (nicht zonengebunden) ueber den nativen
 // Loxone-WS-Befehl audio/cfg/radios/add — auf echtem Sonn Core verifiziert
@@ -38,19 +46,19 @@ const { getAudioserverControlClient } = require('./audioserver_auth');
 // coverurl = Loxone-eigene, offen erreichbare Domain (radio.loxonecloud.com)
 // -- NICHT track_coverurl (coverart.streampal.net), das war in Tests leer.
 const STATIONS = [
-  { name: 'Focus',                       stream: 'https://de.streampal.net/play.cgi?stream=loxone_loxone0', cover: 'https://radio.loxonecloud.com/coverart/449c2aa2.jpg' },
-  { name: 'Best of 80s',                 stream: 'https://de.streampal.net/play.cgi?stream=4U_80s',         cover: 'https://radio.loxonecloud.com/coverart/b78094f3.jpg' },
-  { name: 'Best of 90s',                 stream: 'https://de.streampal.net/play.cgi?stream=4U_90s',         cover: 'https://radio.loxonecloud.com/coverart/b642fec4.jpg' },
-  { name: 'Jazz & Soul',                 stream: 'https://de.streampal.net/play.cgi?stream=4U_bar',         cover: 'https://radio.loxonecloud.com/coverart/9f198c6a.jpg' },
-  { name: 'Chill Out & Lounge',          stream: 'https://de.streampal.net/play.cgi?stream=4U_chill',       cover: 'https://radio.loxonecloud.com/coverart/54adb6b5.jpg' },
-  { name: 'Classical Music',             stream: 'https://de.streampal.net/play.cgi?stream=4U_classical',   cover: 'https://radio.loxonecloud.com/coverart/2e5cfeba.jpg' },
-  { name: 'Smooth Dance Music',          stream: 'https://de.streampal.net/play.cgi?stream=4U_dance',       cover: 'https://radio.loxonecloud.com/coverart/d3b1c3c7.jpg' },
-  { name: 'Hits only',                   stream: 'https://de.streampal.net/play.cgi?stream=4U_hitmusic',    cover: 'https://radio.loxonecloud.com/coverart/2807fbbd.jpg' },
-  { name: 'Oldies',                      stream: 'https://de.streampal.net/play.cgi?stream=4U_oldies',      cover: 'https://radio.loxonecloud.com/coverart/13bf7a50.jpg' },
-  { name: 'Best of Rock',                stream: 'https://de.streampal.net/play.cgi?stream=4U_rock',        cover: 'https://radio.loxonecloud.com/coverart/f5eab7ea.jpg' },
-  { name: 'Schlager',                    stream: 'https://de.streampal.net/play.cgi?stream=4U_schlager',    cover: 'https://radio.loxonecloud.com/coverart/e2163e15.jpg' },
-  { name: 'Spherical & Ambient Sounds',  stream: 'https://de.streampal.net/play.cgi?stream=4U_sphere',      cover: 'https://radio.loxonecloud.com/coverart/8d3fb763.jpg' },
-  { name: 'Urban & Summer Vibes',        stream: 'https://de.streampal.net/play.cgi?stream=4U_urban',       cover: 'https://radio.loxonecloud.com/coverart/d35c93ec.jpg' },
+  { name: 'Focus',                       stream: 'https://de.streampal.net/streams/mounts/loxone_loxone0', cover: 'https://radio.loxonecloud.com/coverart/449c2aa2.jpg' },
+  { name: 'Best of 80s',                 stream: 'https://de.streampal.net/streams/mounts/4U_80s',         cover: 'https://radio.loxonecloud.com/coverart/b78094f3.jpg' },
+  { name: 'Best of 90s',                 stream: 'https://de.streampal.net/streams/mounts/4U_90s',         cover: 'https://radio.loxonecloud.com/coverart/b642fec4.jpg' },
+  { name: 'Jazz & Soul',                 stream: 'https://de.streampal.net/streams/mounts/4U_bar',         cover: 'https://radio.loxonecloud.com/coverart/9f198c6a.jpg' },
+  { name: 'Chill Out & Lounge',          stream: 'https://de.streampal.net/streams/mounts/4U_chill',       cover: 'https://radio.loxonecloud.com/coverart/54adb6b5.jpg' },
+  { name: 'Classical Music',             stream: 'https://de.streampal.net/streams/mounts/4U_classical',   cover: 'https://radio.loxonecloud.com/coverart/2e5cfeba.jpg' },
+  { name: 'Smooth Dance Music',          stream: 'https://de.streampal.net/streams/mounts/4U_dance',       cover: 'https://radio.loxonecloud.com/coverart/d3b1c3c7.jpg' },
+  { name: 'Hits only',                   stream: 'https://de.streampal.net/streams/mounts/4U_hitmusic',    cover: 'https://radio.loxonecloud.com/coverart/2807fbbd.jpg' },
+  { name: 'Oldies',                      stream: 'https://de.streampal.net/streams/mounts/4U_oldies',      cover: 'https://radio.loxonecloud.com/coverart/13bf7a50.jpg' },
+  { name: 'Best of Rock',                stream: 'https://de.streampal.net/streams/mounts/4U_rock',        cover: 'https://radio.loxonecloud.com/coverart/f5eab7ea.jpg' },
+  { name: 'Schlager',                    stream: 'https://de.streampal.net/streams/mounts/4U_schlager',    cover: 'https://radio.loxonecloud.com/coverart/e2163e15.jpg' },
+  { name: 'Spherical & Ambient Sounds',  stream: 'https://de.streampal.net/streams/mounts/4U_sphere',      cover: 'https://radio.loxonecloud.com/coverart/8d3fb763.jpg' },
+  { name: 'Urban & Summer Vibes',        stream: 'https://de.streampal.net/streams/mounts/4U_urban',       cover: 'https://radio.loxonecloud.com/coverart/d35c93ec.jpg' },
 ];
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }

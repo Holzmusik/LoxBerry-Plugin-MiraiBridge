@@ -2,6 +2,25 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-11-20
+
+### Fix
+- **Zonenname im Audio-Overlay fiel nach kurzer Zeit wieder leer aus**:
+  `bin/bridge.js` publizierte den Zonennamen (`<Zone>/name`, z.B.
+  "Esszimmer") bisher bei jedem Zone-Event neu, sobald sich `state.name`
+  gegenüber dem zuletzt publizierten Wert unterschied. Sonn Core schickt
+  `name` aber offenbar nur im ERSTEN Zone-Event nach dem Verbinden als
+  volle Momentaufnahme — die späteren Sekunden-Ticks ("Spielzeit senden")
+  sind Deltas ohne `name`-Feld (`state.name` dann `""`). Das wurde als
+  "Änderung" gewertet und hat den korrekten retained-Wert sofort wieder
+  mit einem leeren String überschrieben — nur das kurze Fenster direkt
+  nach einem Bridge-Neustart (vor dem nächsten Tick) zeigte den richtigen
+  Namen, danach blieb der Header im Audio-Overlay leer UND die
+  Radio/Bibliothek-Erkennung der Firmware (vergleicht Sender- gegen
+  Zonennamen) lief fälschlich auf Basis eines leeren Zonennamens.
+  Publiziert jetzt nur noch, wenn `state.name` wirklich etwas enthält —
+  ein leerer Tick behält den zuletzt bekannten Namen.
+
 ## [Unreleased] - 2026-11-19 (3)
 
 ### Fix

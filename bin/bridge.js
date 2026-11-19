@@ -297,7 +297,18 @@ function setupAudioZones(cfg, mqttClient) {
       // Zonenname (z.B. "Esszimmer") - eigenes Topic, getrennt von
       // source/name (Radiosender/Quelle) - zeigt oben rechts im Widget an
       // (lbl_AudioZoneName/_ov, siehe mqtt_router.yaml topic==base+"/name").
-      publishIfChanged('zonename', `${topicBase}/name`, state.name);
+      //
+      // Bug 2026-11-20 (per MQTT-Broker-Dump + "nach Bridge-Neustart ging's
+      // kurz wieder"-Beobachtung gefunden): Sonn Core schickt "name" offenbar
+      // nur im ERSTEN Zone-Event nach dem Verbinden als volle Momentaufnahme,
+      // spätere Sekunden-Ticks ("Spielzeit senden") sind Deltas ohne "name"
+      // (state.name dann ""). publishIfChanged sah das als "Änderung" (zuvor
+      // "Esszimmer", jetzt "") und hat den korrekten retained-Wert SOFORT
+      // wieder mit einem leeren String überschrieben - nur das kurze Fenster
+      // direkt nach einem Bridge-Neustart (vor dem nächsten Tick) zeigte den
+      // richtigen Namen. Publiziert jetzt nur noch, wenn state.name wirklich
+      // etwas enthält - ein leerer Tick behält den zuletzt bekannten Namen.
+      if (state.name) publishIfChanged('zonename', `${topicBase}/name`, state.name);
       publishIfChanged('title',  `${topicBase}/track/title`,   state.title);
       publishIfChanged('artist', `${topicBase}/track/artist`,  state.artist);
       publishIfChanged('album',  `${topicBase}/track/album`,   state.album);

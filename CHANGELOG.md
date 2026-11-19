@@ -2,6 +2,17 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-11-19
+
+### Fix
+- **Bridge erholt sich jetzt selbst nach einem Miniserver-Neustart ohne
+  Struktur-Antwort**: Bleibt nach erfolgreicher Authentifizierung die
+  LoxAPP3.json-Struktur aus (30s-Watchdog), erzwang das bisher nur eine
+  Log-Zeile — die Bridge lief mit leerem State-Filter weiter und verwarf
+  danach JEDE Sensor-/Zustandsmeldung, bis sie manuell neu gestartet wurde.
+  Der Watchdog ruft jetzt `loxApi.close()` auf, was den bibliothekseigenen
+  Reconnect-Zyklus sauber auslöst (kein Prozess-Neustart nötig).
+
 ## [Unreleased] - 2026-10-16 (2)
 
 ### Fix

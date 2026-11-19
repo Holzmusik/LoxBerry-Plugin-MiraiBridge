@@ -682,11 +682,21 @@ async function main() {
     console.log('[lox] Authentifiziert ✓');
     // Die Lib holt LoxAPP3.json nach jeder Authentifizierung selbst und meldet
     // sie per 'get_structure_file'. Bleibt das aus, wären wir verbunden, aber
-    // ohne Filter — das soll nicht mehr still passieren.
+    // ohne Filter — alle Sensor-/Zustandsupdates würden dann still verworfen
+    // (publishState()'s stateFilter-Check), ohne dass sich das von selbst
+    // erholt (2026-11-19 im Code gefunden: vorher nur ein Log-Eintrag, keine
+    // Reaktion — genau das erklärt "Panel bekommt keine Daten mehr" nach
+    // einem Miniserver-Neustart, der WS-Reconnect der Lib ist selbst
+    // robust, aber dieser Sonderfall "verbunden, aber ohne Struktur" wurde
+    // bisher nicht behandelt). loxApi.close() loest sauber den Lib-eigenen
+    // Reconnect-Zyklus aus (Connection.close() -> 'close'-Event ->
+    // reconnect(), siehe node-lox-ws-api/lib/API.js) - kein Prozess-Neustart
+    // noetig.
     clearTimeout(structureWatchdog);
     structureWatchdog = setTimeout(() => {
       if (loxAuthorized && !structureLive) {
-        console.error('[lox] Authentifiziert, aber keine Struktur (LoxAPP3.json) erhalten — State-Updates werden verworfen');
+        console.error('[lox] Authentifiziert, aber keine Struktur (LoxAPP3.json) erhalten — erzwinge Reconnect');
+        loxApi.close();
       }
     }, 30000);
   });

@@ -2,6 +2,25 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-11-19 (3)
+
+### Fix
+- **Raumfavoriten fielen nach einem WS-Verbindungsabbruch dauerhaft aus**:
+  `bin/bridge.js` holte sich den authentifizierten Audioserver-Client
+  (`AudioserverControlClient`) bisher nur EINMAL beim Bridge-Start und hielt
+  diese Referenz für die gesamte Laufzeit fest. Fiel die WS-Verbindung zur
+  Box irgendwann weg (Boxneustart, Netz-Hänger), sprang `authenticated` auf
+  `false`, aber `authFailReason` blieb für immer auf seinem ursprünglichen
+  `null` stehen (die erste Anmeldung war ja erfolgreich) — auf Hardware
+  beobachtet als wiederkehrendes "Box unterstützt secure/authenticate nicht
+  (null)" alle `FAVORITES_REFRESH_MS` (10 Min), bis die Bridge komplett neu
+  gestartet wurde. Die Registry (`getAudioserverControlClient`) ersetzt
+  einen geschlossenen Client eigentlich automatisch — das griff aber nie,
+  weil niemand sie nach dem Start erneut aufgerufen hat. `getCtrl()` holt
+  den Client jetzt bei jedem Zugriff (Favoriten-Refresh UND "favorite"-
+  Kommando) frisch aus der Registry, damit das vorgesehene Self-Healing
+  auch tatsächlich zum Tragen kommt.
+
 ## [Unreleased] - 2026-11-19 (2)
 
 ### Fix

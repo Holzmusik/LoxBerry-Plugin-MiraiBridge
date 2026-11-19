@@ -264,7 +264,7 @@ function buildStateFilter(cfg, loxStructure) {
 const FAVORITES_REFRESH_MS = 10 * 60 * 1000;
 
 function setupAudioZones(cfg, mqttClient) {
-  const zones = []; // { topicBase, host, httpPort, zoneNum, panelName, ctrl }
+  const zones = []; // { topicBase, host, httpPort, zoneNum, panelName, getCtrl }
 
   for (const panel of cfg.panels || []) {
     const host = panel.audioserver_host;
@@ -337,25 +337,41 @@ function setupAudioZones(cfg, mqttClient) {
     // einer LoxBerry). Ohne audioserver_msno bleibt die Zone einfach ohne
     // Favoriten — Zustand/Play/Pause/Volume oben sind davon unberührt.
     const audioMsno = panel.audioserver_msno || (cfg.loxone && cfg.loxone.msno);
-    let ctrl = null;
+    let msConn = null;
     if (audioMsno) {
       try {
-        const msConn = loadMiniserverConn(audioMsno);
-        ctrl = getAudioserverControlClient(host, wsPort, msConn);
+        msConn = loadMiniserverConn(audioMsno);
       } catch (e) {
         console.warn(`[audio] Panel "${panel.name}": Miniserver #${audioMsno} für Favoriten nicht ladbar (${e.message}) — Favoriten-Feature bleibt für diese Zone aus`);
       }
     }
 
-    // publishFavorites bewusst außerhalb des "if (ctrl)"-Blocks deklariert
-    // (als No-Op falls kein ctrl) — der MQTT-Handler unten (case
+    // getCtrl() statt eines einmalig gecachten Clients (Bug 2026-11-19, auf
+    // Hardware beobachtet): getAudioserverControlClient()/seine Registry
+    // ersetzt einen geschlossenen Client eigentlich automatisch durch einen
+    // frischen (siehe Kommentar dort) — das griff hier aber nie, weil der
+    // Client früher EINMAL beim Zonen-Setup geholt und als "ctrl" dauerhaft
+    // im Closure gehalten wurde. Fiel die WS-Verbindung zur Box irgendwann
+    // weg (Boxneustart/Netz-Hänger), blieb "ctrl" für den Rest der Bridge-
+    // Laufzeit auf dem toten Client stehen: authenticated=false (vom
+    // ws-"close"-Handler gesetzt), authFailReason aber noch der ALTE Wert
+    // "null" von der ursprünglich erfolgreichen Anmeldung — Favoriten gingen
+    // dauerhaft nicht mehr ("Box unterstützt secure/authenticate nicht
+    // (null)" alle FAVORITES_REFRESH_MS), bis die Bridge komplett neu
+    // gestartet wurde. Mit getCtrl() läuft bei jedem Zugriff wieder die
+    // Registry-Prüfung mit, die einen geschlossenen Client ersetzt.
+    const getCtrl = () => (msConn ? getAudioserverControlClient(host, wsPort, msConn) : null);
+
+    // publishFavorites bewusst außerhalb des "if (msConn)"-Blocks deklariert
+    // (als No-Op falls kein msConn) — der MQTT-Handler unten (case
     // 'favorites_refresh') ruft dieselbe Funktion über zone.publishFavorites
     // auf, wenn die Firmware beim Öffnen des Favoriten-Overlays aktiv ein
     // frisches Update anfordert (statt bis zu 10 Minuten auf den nächsten
     // Timer-Tick zu warten).
     let publishFavorites = async () => {};
-    if (ctrl) {
+    if (msConn) {
       publishFavorites = async () => {
+        const ctrl = getCtrl();
         try {
           const authenticated = await ctrl.ready();
           if (!authenticated) {
@@ -374,7 +390,7 @@ function setupAudioZones(cfg, mqttClient) {
       setInterval(publishFavorites, FAVORITES_REFRESH_MS);
     }
 
-    zones.push({ topicBase, host, httpPort, zoneNum, panelName: panel.name, ctrl, publishFavorites });
+    zones.push({ topicBase, host, httpPort, zoneNum, panelName: panel.name, getCtrl, publishFavorites });
   }
 
   if (zones.length === 0) return;
@@ -427,11 +443,12 @@ function setupAudioZones(cfg, mqttClient) {
       // WS-Kanal (audioserver_auth.js) — deshalb eigener Zweig mit eigenem
       // return statt cmdPath/sendAudioserverCommand.
       case 'favorite': {
-        if (!zone.ctrl) {
+        const ctrl = zone.getCtrl();
+        if (!ctrl) {
           console.warn(`[audio] "favorite" Kommando ignoriert (${zone.panelName}): kein Miniserver für Favoriten konfiguriert (panel.audioserver_msno)`);
           return;
         }
-        zone.ctrl.playRoomFavorite(zone.zoneNum, payload)
+        ctrl.playRoomFavorite(zone.zoneNum, payload)
           .then((res) => console.log(`[audio] Favorit ${payload} auf Zone ${zone.zoneNum} (${zone.panelName}):`, JSON.stringify(res.roomfav_result)))
           .catch((e) => console.warn(`[audio] Favorit ${payload} abspielen fehlgeschlagen (${zone.panelName}): ${e.message}`));
         return;

@@ -2,20 +2,17 @@
 // MiraiBridge – Cover-Bild Proxy
 // Leitet JPEG durch, wandelt PNG/WebP via php-gd in JPEG um.
 // Liegt in html/ (nicht htmlauth/) → kein Login nötig (Zugriff vom ESP).
-
-// Timing-Diagnose (temporär, 2026-08-19): externer CDN-Fetch vs. GD-Resize
-// vs. Gesamtzeit lassen sich vom ESP32 aus nicht unterscheiden — beide
-// landen als X-Debug-*-Response-Header UND im PHP-error_log, damit sich
-// klären lässt, wo die 1-4s bei neuen Cover-URLs tatsächlich hingehen.
-$t_start = microtime(true);
-
 $url = isset($_GET['url']) ? trim($_GET['url']) : '';
 if ($url === '') {
     http_response_code(400);
     exit;
 }
-$target_w = isset($_GET['w']) ? max(1, (int)$_GET['w']) : 0;
-$target_h = isset($_GET['h']) ? max(1, (int)$_GET['h']) : 0;
+// Sicherheitsreview 2026-11-27 (Punkt 1): w/h waren bisher nach oben
+// unbegrenzt — imagecreatetruecolor() mit absichtlich riesigen Werten
+// (z.B. ?w=100000&h=100000) ist ein Speicher-DoS. Echte Cover brauchen nie
+// mehr als 600px (siehe MiraiPanel-LCD cover_decoder.h), 800 ist grosszuegig.
+$target_w = isset($_GET['w']) ? max(1, min(800, (int)$_GET['w'])) : 0;
+$target_h = isset($_GET['h']) ? max(1, min(800, (int)$_GET['h'])) : 0;
 
 $scheme = parse_url($url, PHP_URL_SCHEME);
 if (!in_array($scheme, ['http', 'https'], true)) {
@@ -60,8 +57,6 @@ if (is_file($out_cache_file)) {
     header('Content-Type: image/jpeg');
     header('Content-Length: ' . filesize($out_cache_file));
     header('Cache-Control: public, max-age=86400');
-    header('X-Debug-Src: output-cache');
-    header('X-Debug-Total-Ms: ' . (int) round((microtime(true) - $t_start) * 1000));
     readfile($out_cache_file);
     exit;
 }
@@ -78,10 +73,8 @@ $cache_file = $cache_dir . '/' . md5($url) . '.bin';
 $cache_ttl = 30; // Sekunden
 
 $data = false;
-$src_from_cache = false;
 if (is_file($cache_file) && (time() - filemtime($cache_file)) < $cache_ttl) {
     $data = @file_get_contents($cache_file);
-    $src_from_cache = ($data !== false && strlen($data) >= 8);
 }
 
 $t_fetch_start = microtime(true);
@@ -92,7 +85,24 @@ if ($data === false || strlen($data) < 8) {
         'user_agent'    => 'ESPHome-CoverProxy/1.0',
         'ignore_errors' => true,
     ]]);
-    $data = @file_get_contents($url, false, $ctx);
+    // Sicherheitsreview 2026-11-27 (Punkt 1): Download-Groesse war bisher
+    // unbegrenzt (file_get_contents() liest alles in den Speicher) - Cover-
+    // Thumbnails sind winzig, 4 MB ist grosszuegig, bricht aber eine
+    // absichtlich riesige Antwort ab statt sie komplett zu laden.
+    $max_bytes = 4 * 1024 * 1024;
+    $data = false;
+    $fh = @fopen($url, 'rb', false, $ctx);
+    if ($fh !== false) {
+        $buf = '';
+        while (!feof($fh)) {
+            $chunk = fread($fh, 65536);
+            if ($chunk === false) { $buf = false; break; }
+            $buf .= $chunk;
+            if (strlen($buf) > $max_bytes) { $buf = false; break; }
+        }
+        fclose($fh);
+        $data = $buf;
+    }
     $fetch_ms = (int) round((microtime(true) - $t_fetch_start) * 1000);
     if ($data === false || strlen($data) < 8) {
         error_log(sprintf('cover_proxy: FETCH FEHLGESCHLAGEN nach %dms url=%s', $fetch_ms, $url));
@@ -134,8 +144,6 @@ if (function_exists('imagecreatefromstring') && function_exists('imagejpeg')) {
         }
         imagedestroy($img);
 
-        $t_resize_done = microtime(true);
-
         // Content-Length senden: ESPHome online_image braucht known size
         // für JPEG-Dekodierung (resize download buffer). Chunked transfer → Deadlock.
         // Qualität 85→75: bei Cover-Thumbnail-Größen visuell kaum ein
@@ -154,25 +162,11 @@ if (function_exists('imagecreatefromstring') && function_exists('imagejpeg')) {
         $mtime = time();
         @touch($out_cache_file, $mtime);
 
-        $resize_ms = (int) round(($t_resize_done - $t_fetch_start) * 1000) - $fetch_ms;
-        $encode_ms = (int) round((microtime(true) - $t_resize_done) * 1000);
-        $total_ms = (int) round((microtime(true) - $t_start) * 1000);
-        $src_label = $src_from_cache ? 'src-cache' : ($fetch_ms > 0 ? 'external-fetch' : 'unknown');
-
         header('Content-Type: image/jpeg');
         header('Content-Length: ' . strlen($jpeg));
         header('ETag: "' . $out_cache_key . '-' . $mtime . '"');
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
         header('Cache-Control: public, max-age=86400');
-        header('X-Debug-Src: ' . $src_label);
-        header('X-Debug-Fetch-Ms: ' . $fetch_ms);
-        header('X-Debug-Resize-Ms: ' . max(0, $resize_ms));
-        header('X-Debug-Encode-Ms: ' . $encode_ms);
-        header('X-Debug-Total-Ms: ' . $total_ms);
-        error_log(sprintf(
-            'cover_proxy: total=%dms fetch=%dms resize=%dms encode=%dms src=%s size=%dB url=%s',
-            $total_ms, $fetch_ms, max(0, $resize_ms), $encode_ms, $src_label, strlen($jpeg), $url
-        ));
         echo $jpeg;
         exit;
     }

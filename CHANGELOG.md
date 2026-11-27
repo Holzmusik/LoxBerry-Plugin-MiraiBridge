@@ -2,6 +2,37 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-11-27
+
+### Security
+- **Babyfon-WSS-Proxy (`bin/bridge.js`)**: der WebSocket-Pfad (`/babyfon`,
+  öffentlich auf Port 8443 erreichbar) prüfte den Ziel-Host `panel=` gar
+  nicht — nur der separate HTTP-Config-Pfad tat das. Zusätzlich hatte die
+  Allowlist-Regex keinen Endanker, sodass ein Hostname wie
+  `192.168.evil.com` als private IP durchgerutscht wäre. Der Proxy ließ
+  sich damit als SSRF-Relais gegen beliebige Hosts im Internet missbrauchen.
+  Jetzt für beide Pfade dieselbe Prüfung (`net.isIP()` + verankerte
+  RFC1918-Regex).
+- **Panel → Loxone ohne Allowlist (`bin/bridge.js`)**: jeder MQTT-Client am
+  Broker konnte über `mirai/lox/<serial>/<uuid>/cmd` JEDE Loxone-UUID mit
+  den vollen Admin-Rechten der Bridge-Verbindung schalten — es gab keine
+  Prüfung, ob die UUID überhaupt zu einem konfigurierten Panel gehört. Jetzt
+  nur noch UUIDs erlaubt, die als Control (oder `sleep_cmd_uuid`) eines
+  Panels in `bridge.json` konfiguriert sind; zusätzlich wird der
+  Befehls-Payload auf "kein `/`, kein Leerraum" geprüft (verhindert
+  Pfad-Injektion ins Loxone-Kommando).
+- **`webfrontend/html/raw_test.php` entfernt**: temporäres Diagnose-Skript
+  ohne Login, war nur zum Testen des Apache/PHP-Schreibverhaltens gedacht.
+- **`cover_proxy.php`**: `w`/`h` auf max. 800px begrenzt (vorher unbegrenzt
+  → `imagecreatetruecolor()` mit absichtlich riesigen Werten war ein
+  Speicher-DoS), Download jetzt auf 4 MB begrenzt (vorher unbegrenzt in den
+  Speicher gelesen), temporäre Debug-Header (`X-Debug-*`) und das
+  zugehörige verbose `error_log` je Request entfernt.
+
+### Aufräumen
+- `bin/audioserver_probe.js` (Einmal-Testskript, kein Teil von bridge.js)
+  nach `dev/` verschoben, passend zu den übrigen Probe-/Testskripten dort.
+
 ## [Unreleased] - 2026-11-20
 
 ### Fix

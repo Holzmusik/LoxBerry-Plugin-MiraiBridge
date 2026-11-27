@@ -1,7 +1,9 @@
 'use strict';
 
 // ── AudioZoneV2 / echter Loxone Audioserver — Verbindungs-Probe ────────────
-// Einmal-Testskript, KEIN Teil des laufenden bridge.js.
+// Einmal-Testskript, KEIN Teil des laufenden bridge.js. Liegt bewusst in
+// dev/ statt bin/ (Sicherheitsreview 2026-11-27, Punkt 6) - gehört nicht in
+// den Produktionscode.
 //
 // STAND 2026-09-10, auf echter Hardware verifiziert: Der Audioserver pusht
 // über ws://<ip>:7091/ws/rfc6455 nach dem Connect SOFORT vollständige

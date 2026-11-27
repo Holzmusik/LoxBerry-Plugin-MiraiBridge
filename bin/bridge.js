@@ -2,6 +2,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const net  = require('net');
 const http = require('http');
 const https = require('https');
 const { execFileSync } = require('child_process');
@@ -229,6 +230,26 @@ function buildStateFilter(cfg, loxStructure) {
   }
 
   return stateUuids;
+}
+
+// ── Command-UUID-Allowlist aus bridge.json ─────────────────────────────────
+// Sicherheitsreview 2026-11-27 (Punkt 3): Panel → Loxone lief bisher komplett
+// ungefiltert - jede UUID, die irgendein MQTT-Client unter
+// mirai/lox/<serial>/<uuid>/cmd published, landete 1:1 als jdev/sps/io/
+// <uuid>/<value> bei Loxone (Verbindung läuft mit vollen Admin-Rechten,
+// siehe sendToLoxone()). Nur UUIDs, die als Control (oder sleep_cmd_uuid)
+// eines in bridge.json konfigurierten Panels auftauchen, dürfen tatsächlich
+// etwas schalten - exakt dieselbe Quelle, die buildStateFilter() oben schon
+// für die Lese-Richtung nutzt.
+function buildCommandAllowlist(cfg) {
+  const uuids = new Set();
+  for (const panel of cfg.panels || []) {
+    for (const controlUuid of Object.keys(panel.controls || {})) {
+      uuids.add(controlUuid.toLowerCase());
+    }
+    if (panel.sleep_cmd_uuid) uuids.add(String(panel.sleep_cmd_uuid).toLowerCase());
+  }
+  return uuids;
 }
 
 // ── Echter Loxone Audioserver ODER Sonn Core — reines Protokoll-Routing ────
@@ -544,6 +565,7 @@ async function main() {
   let stateFilter = new Set();
   let mqttClient = null;
   let loxCmdTopic = null;
+  const cmdAllowlist = buildCommandAllowlist(cfg); // siehe buildCommandAllowlist()-Kommentar
 
   const controlCount = cfg.panels.reduce((s, p) => s + Object.keys(p.controls || {}).length, 0);
   const globalCount  = Object.values(cfg.global || {}).filter(Boolean).length;
@@ -642,12 +664,10 @@ async function main() {
     subscribeLoxCmd();
   });
 
-  // Panel → Loxone ist bewusst ungefiltert: JEDE UUID, die das Panel unter
-  // diesem Topic-Schema published (Sensorwerte, Heizung-Sollwert, Jalousie-
-  // Puls, Tastendruck, Audio-Kommando, ...), wird 1:1 an Loxone weitergereicht
-  // — anders als bei publishState() gibt es hier keine Allowlist, weil wir
-  // per Wildcard-Abo sowieso nur exakt das empfangen, was die Firmware selbst
-  // unter mirai/lox/<serial>/+/cmd sendet.
+  // Panel → Loxone: nur UUIDs, die in bridge.json als Panel-Control (oder
+  // sleep_cmd_uuid) konfiguriert sind, dürfen etwas schalten (cmdAllowlist,
+  // siehe buildCommandAllowlist()) - jeder MQTT-Client am Broker könnte
+  // sonst beliebige Loxone-UUIDs mit den Admin-Rechten der Bridge schalten.
   mqttClient.on('message', (topic, message) => {
     // Audio-Topics (mirai/audio/...) behandelt setupAudioZones() selbst.
     if (!topic.startsWith('mirai/lox/')) return;
@@ -658,6 +678,11 @@ async function main() {
     }
     if (cmdMatch[1] !== msSerial) {
       console.warn(`[cmd] Serial-Mismatch ignoriert: ${topic} (erwartet ${msSerial})`);
+      return;
+    }
+    const targetUuid = cmdMatch[2].toLowerCase();
+    if (!cmdAllowlist.has(targetUuid)) {
+      console.warn(`[cmd] UUID nicht als Panel-Control in bridge.json konfiguriert, verworfen: ${targetUuid}`);
       return;
     }
     sendToLoxone(cmdMatch[2], message.toString());
@@ -770,6 +795,12 @@ async function main() {
   // würde die Bridge sinnlos "jdev/sps/io/topic_mic/…" an Loxone schicken.
   const LOX_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{16}$/i;
 
+  // Sicherheitsreview 2026-11-27 (Punkt 3): value landet unverändert hinter
+  // der UUID im Kommando "jdev/sps/io/<uuid>/<value>" - ein "/" darin würde
+  // zusätzliche Pfadsegmente einschleusen. Echte Werte (Zahlen, on/off,
+  // Up/Down-Pulse etc.) enthalten nie "/" oder Leerraum.
+  const CMD_VALUE_RE = /^[^/\s]+$/;
+
   // node-lox-ws-api's send_command() hat keinerlei Fehlerbehandlung/Rückgabe
   // (kein Callback, kein Promise, keine Prüfung ob die Verbindung überhaupt
   // steht) — ein interner Fehler (z.B. Verbindung/Auth noch nicht bereit)
@@ -798,6 +829,10 @@ async function main() {
     }
     if (!loxAuthorized) {
       console.warn(`[cmd] Noch nicht bei Loxone authentifiziert — Befehl verworfen: ${key} = ${value}`);
+      return;
+    }
+    if (!CMD_VALUE_RE.test(value)) {
+      console.warn(`[cmd] Payload enthält ungültige Zeichen, verworfen: ${key} = ${JSON.stringify(value)}`);
       return;
     }
     if (logLevel.enabled(logLevel.DEBUG)) console.log(`[cmd] jdev/sps/io/${key}/${value}`);
@@ -955,9 +990,17 @@ function ensureProxyCert() {
 // oeffentliche Internet missbraucht werden kann (SSRF). Der ganze Zweck
 // dieses Endpunkts ist ausschliesslich die Kommunikation mit dem eigenen
 // Panel im selben Heimnetz, nie mit irgendeinem fremden Host.
-const PRIVATE_LAN_HOST_RE = /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
+const PRIVATE_LAN_HOST_RE = /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})$/;
 function isAllowedPanelHost(host) {
-  return PRIVATE_LAN_HOST_RE.test(host) || host.endsWith('.local');
+  if (host.endsWith('.local')) return true;
+  // Sicherheitsreview 2026-11-27 (Punkt 2): die Regex hatte bisher keinen
+  // Endanker UND wurde direkt auf den rohen Hostnamen angewendet - ein
+  // Hostname wie "192.168.evil.com" erfuellte "^192\.168\." und waere
+  // durchgerutscht. net.isIP() akzeptiert nur echte IP-Literale, danach
+  // greift die Regex ausschliesslich auf dieser IP, kein DNS-Trick mehr
+  // moeglich.
+  if (net.isIP(host) !== 4) return false;
+  return PRIVATE_LAN_HOST_RE.test(host);
 }
 
 // HTTPS→HTTP-Durchreiche fuer GENAU EINEN Zweck: die MiraiFon-App soll die
@@ -1042,9 +1085,14 @@ function startBabyfonWssProxy(port) {
     const panelPort = parseInt(url.searchParams.get('port'), 10) || 5000;
     const token = url.searchParams.get('token') || '';
 
-    if (!panelHost) {
-      console.warn('[wss-proxy] Verbindung ohne ?panel= abgelehnt');
-      appWs.close(1008, 'panel fehlt');
+    // Sicherheitsreview 2026-11-27 (Punkt 2): diese Prüfung lief bisher NUR
+    // im HTTP-Config-Pfad (handleBabyfonConfigProxy) - der WS-Pfad hier
+    // (öffentlich auf 0.0.0.0 erreichbar) hat panelHost nur auf Existenz,
+    // nie auf Zulässigkeit geprüft. Damit ließ sich dieser Proxy als
+    // SSRF-Relais gegen beliebige Hosts im Internet missbrauchen.
+    if (!panelHost || !isAllowedPanelHost(panelHost)) {
+      console.warn(`[wss-proxy] Verbindung mit fehlendem/unzulässigem ?panel= abgelehnt: ${panelHost}`);
+      appWs.close(1008, 'panel fehlt oder unzulässig');
       return;
     }
 

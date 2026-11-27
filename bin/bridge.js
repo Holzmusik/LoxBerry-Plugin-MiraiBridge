@@ -232,22 +232,44 @@ function buildStateFilter(cfg, loxStructure) {
   return stateUuids;
 }
 
-// ── Command-UUID-Allowlist aus bridge.json ─────────────────────────────────
-// Sicherheitsreview 2026-11-27 (Punkt 3): Panel → Loxone lief bisher komplett
-// ungefiltert - jede UUID, die irgendein MQTT-Client unter
-// mirai/lox/<serial>/<uuid>/cmd published, landete 1:1 als jdev/sps/io/
-// <uuid>/<value> bei Loxone (Verbindung läuft mit vollen Admin-Rechten,
-// siehe sendToLoxone()). Nur UUIDs, die als Control (oder sleep_cmd_uuid)
-// eines in bridge.json konfigurierten Panels auftauchen, dürfen tatsächlich
-// etwas schalten - exakt dieselbe Quelle, die buildStateFilter() oben schon
-// für die Lese-Richtung nutzt.
-function buildCommandAllowlist(cfg) {
+// ── Command-UUID-Allowlist aus bridge.json + LoxAPP3.json ──────────────────
+// Sicherheitsreview 2026-11-27 (Punkt 3), nachgebessert 2026-11-28: Panel →
+// Loxone lief ursprünglich komplett ungefiltert - jede UUID, die irgendein
+// MQTT-Client unter mirai/lox/<serial>/<uuid>/cmd published, landete 1:1 als
+// jdev/sps/io/<uuid>/<value> bei Loxone (Verbindung läuft mit vollen
+// Admin-Rechten, siehe sendToLoxone()).
+//
+// Die erste Fassung dieser Allowlist enthielt NUR die Control-UUIDs selbst
+// (panel.controls-Keys) - das reicht für Heizung/Licht/Schalter ("cmd" =
+// die uuidAction der Control selbst, identisch zum Control-Key), aber NICHT
+// für Jalousie Hoch/Runter oder Licht-Master/-Farbe: die adressieren eigene
+// States-UUIDs (states.up/down/position/color), nicht die Control-UUID -
+// siehe MiraiPanel-LCD modules/blinds_template.yaml (Topic_Blinds_Up_${n}
+// kommt aus states['up'], ein eigenständiger Virtual-Input). Die erste
+// Fassung hätte also echte Jalousie-Befehle verworfen. Deshalb hier
+// dieselbe states+subControls-Traversierung wie buildStateFilter() oben,
+// zusätzlich inkl. der Control-UUIDs selbst, aber OHNE cfg.global (reine
+// Lese-Werte für die Panel-Anzeige, nie ein Schreib-Ziel vom Panel aus).
+function buildCommandAllowlist(cfg, loxStructure) {
   const uuids = new Set();
+  const add = (u) => { if (u) uuids.add(String(u).toLowerCase()); };
+  const loxControls = (loxStructure && loxStructure.controls) || {};
+
   for (const panel of cfg.panels || []) {
     for (const controlUuid of Object.keys(panel.controls || {})) {
-      uuids.add(controlUuid.toLowerCase());
+      add(controlUuid);
+      const loxCtrl = loxControls[controlUuid] || loxControls[controlUuid.toLowerCase()];
+      if (!loxCtrl) continue;
+      for (const stateUuid of Object.values(loxCtrl.states || {})) add(stateUuid);
+      for (const sub of Object.values(loxCtrl.subControls || {})) {
+        for (const stateUuid of Object.values(sub.states || {})) add(stateUuid);
+      }
     }
-    if (panel.sleep_cmd_uuid) uuids.add(String(panel.sleep_cmd_uuid).toLowerCase());
+    add(panel.sleep_cmd_uuid);
+    // Hardware-Tasten S1–S8 (api.php build_topics: t_sw1..t_sw8)
+    for (const u of panel.hw_keys || []) add(u);
+    // Sensor-Ziele (t_rt, t_rh, t_co2, t_voc, t_pir, t_mic, t_brightness, t_lux, t_supply_power)
+    for (const u of Object.values(panel.sensor_targets || {})) add(u);
   }
   return uuids;
 }
@@ -565,7 +587,9 @@ async function main() {
   let stateFilter = new Set();
   let mqttClient = null;
   let loxCmdTopic = null;
-  const cmdAllowlist = buildCommandAllowlist(cfg); // siehe buildCommandAllowlist()-Kommentar
+  // Wird in applyStructure() neu gebaut, wie stateFilter - braucht
+  // loxStructure (states-UUIDs der Controls), siehe buildCommandAllowlist().
+  let cmdAllowlist = new Set();
 
   const controlCount = cfg.panels.reduce((s, p) => s + Object.keys(p.controls || {}).length, 0);
   const globalCount  = Object.values(cfg.global || {}).filter(Boolean).length;
@@ -596,7 +620,8 @@ async function main() {
     const oldSerial = msSerial;
     msSerial = (structure.msInfo && structure.msInfo.serialNr) || String(cfg.loxone.msno);
     stateFilter = buildStateFilter(cfg, structure);
-    console.log(`[bridge] Struktur aktiv (${source}): ${stateFilter.size} State-UUIDs aus ${controlCount} Controls + ${globalCount} globalen Werten`);
+    cmdAllowlist = buildCommandAllowlist(cfg, structure);
+    console.log(`[bridge] Struktur aktiv (${source}): ${stateFilter.size} State-UUIDs aus ${controlCount} Controls + ${globalCount} globalen Werten, ${cmdAllowlist.size} Kommando-UUIDs erlaubt`);
     if (stateFilter.size > 0) {
       if (logLevel.enabled(logLevel.DEBUG)) {
         for (const uuid of stateFilter) console.log(`[topics] mirai/lox/${msSerial}/${uuid}`);

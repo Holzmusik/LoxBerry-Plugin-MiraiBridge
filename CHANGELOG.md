@@ -2,6 +2,19 @@
 
 Alle nennenswerten Änderungen an diesem Plugin werden hier festgehalten.
 
+## [Unreleased] - 2026-11-28
+
+### Fix
+- **Regression aus beta.26**: die neue Panel→Loxone-Allowlist (siehe unten)
+  enthielt nur die Control-UUIDs selbst - Jalousie Hoch/Runter sowie
+  Hardware-Tasten (`hw_keys`) und Sensor-Ziele (`sensor_targets`) adressieren
+  aber eigene UUIDs (states.up/down, bzw. eigene panel-Felder außerhalb von
+  `controls`), die nicht in dieser Allowlist steckten — echte Jalousie-
+  Befehle wären damit verworfen worden. `buildCommandAllowlist()` baut jetzt
+  dieselbe states+subControls-Traversierung wie `buildStateFilter()` und
+  wird wie dieser bei jeder Struktur-Aktualisierung neu aufgebaut (statt
+  einmalig nur aus `cfg`), plus `hw_keys`/`sensor_targets`.
+
 ## [Unreleased] - 2026-11-27
 
 ### Security
